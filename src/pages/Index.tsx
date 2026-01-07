@@ -1,7 +1,7 @@
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
 import Features from "@/components/Features";
-import MapDemo from "@/components/MapDemo";
+import MapViewer from "@/components/MapViewer";
 import Timeline from "@/components/Timeline";
 import TechStack from "@/components/TechStack";
 import TeamStructure from "@/components/TeamStructure";
@@ -13,7 +13,7 @@ const Index = () => {
       <Header />
       <Hero />
       <Features />
-      <MapDemo />
+      <MapViewer />
       <Timeline />
       <TechStack />
       <TeamStructure />
