@@ -42,6 +42,7 @@ import {
   Landmark,
   RadioTower,
   Target,
+  Activity,
 } from "lucide-react";
 
 // Search result interface
@@ -250,6 +251,10 @@ const MapViewer = () => {
   const watchIdRef = useRef<number | null>(null);
   const lastAnnouncedStepRef = useRef<number>(-1);
 
+  // Traffic layer state
+  const [showTrafficLayer, setShowTrafficLayer] = useState(false);
+  const [trafficLoading, setTrafficLoading] = useState(false);
+
   // Initialize voice guidance
   useEffect(() => {
     voiceGuidance.current = new VoiceGuidance();
@@ -291,6 +296,8 @@ const MapViewer = () => {
 
     map.current.on("load", () => {
       addCityMarkers();
+      // Add traffic layer sources (hidden by default)
+      addTrafficLayerSources();
     });
 
     return () => {
@@ -538,6 +545,192 @@ const MapViewer = () => {
       },
     });
   };
+
+  // Traffic layer data - simulated congestion for major Pakistan highways
+  const trafficSegments = [
+    // Islamabad-Lahore Motorway (M2)
+    { coordinates: [[73.0479, 33.6844], [73.2, 33.4], [73.5, 33.0], [73.8, 32.5], [74.0, 32.2], [74.3587, 31.5204]], congestion: "moderate" },
+    // Lahore-Faisalabad
+    { coordinates: [[74.3587, 31.5204], [73.8, 31.4], [73.135, 31.4504]], congestion: "heavy" },
+    // Karachi-Hyderabad
+    { coordinates: [[67.0011, 24.8607], [67.5, 25.2], [68.3, 25.3]], congestion: "light" },
+    // Islamabad-Peshawar (M1)
+    { coordinates: [[73.0479, 33.6844], [72.5, 33.8], [72.0, 34.0], [71.5249, 34.0151]], congestion: "moderate" },
+    // Lahore-Multan (M4)
+    { coordinates: [[74.3587, 31.5204], [73.8, 31.0], [73.0, 30.5], [71.5249, 30.1575]], congestion: "light" },
+    // Karachi Port Roads
+    { coordinates: [[66.9, 24.8], [67.0011, 24.8607], [67.1, 24.9]], congestion: "heavy" },
+    // Rawalpindi-Islamabad
+    { coordinates: [[73.0169, 33.5651], [73.03, 33.62], [73.0479, 33.6844]], congestion: "heavy" },
+    // Quetta-Chaman
+    { coordinates: [[66.9750, 30.1798], [66.5, 30.5], [66.0, 30.8]], congestion: "light" },
+    // Faisalabad-Multan
+    { coordinates: [[73.135, 31.4504], [72.5, 31.0], [71.5249, 30.1575]], congestion: "moderate" },
+    // Peshawar-Swat
+    { coordinates: [[71.5249, 34.0151], [72.0, 34.5], [72.3, 35.0]], congestion: "light" },
+  ];
+
+  const getCongestionColor = (congestion: string): string => {
+    switch (congestion) {
+      case "heavy": return "#ef4444"; // Red
+      case "moderate": return "#f59e0b"; // Orange/Amber
+      case "light": return "#22c55e"; // Green
+      default: return "#6b7280"; // Gray
+    }
+  };
+
+  const addTrafficLayerSources = useCallback(() => {
+    if (!map.current) return;
+
+    // Add traffic segments as GeoJSON source
+    const trafficFeatures = trafficSegments.map((segment, index) => ({
+      type: "Feature" as const,
+      properties: {
+        id: index,
+        congestion: segment.congestion,
+        color: getCongestionColor(segment.congestion),
+      },
+      geometry: {
+        type: "LineString" as const,
+        coordinates: segment.coordinates,
+      },
+    }));
+
+    // Check if source already exists
+    if (!map.current.getSource("traffic")) {
+      map.current.addSource("traffic", {
+        type: "geojson",
+        data: {
+          type: "FeatureCollection",
+          features: trafficFeatures,
+        },
+      });
+
+      // Add traffic layer (hidden by default)
+      map.current.addLayer({
+        id: "traffic-layer",
+        type: "line",
+        source: "traffic",
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+          visibility: "none",
+        },
+        paint: {
+          "line-color": ["get", "color"],
+          "line-width": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            5, 3,
+            10, 6,
+            15, 10,
+          ],
+          "line-opacity": 0.8,
+        },
+      });
+
+      // Add traffic outline for better visibility
+      map.current.addLayer({
+        id: "traffic-layer-outline",
+        type: "line",
+        source: "traffic",
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+          visibility: "none",
+        },
+        paint: {
+          "line-color": "#ffffff",
+          "line-width": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            5, 5,
+            10, 9,
+            15, 14,
+          ],
+          "line-opacity": 0.5,
+        },
+      }, "traffic-layer");
+
+      // Add animated pulse effect layer for heavy traffic
+      map.current.addLayer({
+        id: "traffic-pulse",
+        type: "line",
+        source: "traffic",
+        filter: ["==", ["get", "congestion"], "heavy"],
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+          visibility: "none",
+        },
+        paint: {
+          "line-color": "#ef4444",
+          "line-width": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            5, 6,
+            10, 12,
+            15, 18,
+          ],
+          "line-opacity": 0.3,
+        },
+      }, "traffic-layer-outline");
+    }
+  }, []);
+
+  const toggleTrafficLayer = useCallback(() => {
+    if (!map.current) return;
+
+    setTrafficLoading(true);
+
+    // Simulate loading delay for effect
+    setTimeout(() => {
+      const visibility = showTrafficLayer ? "none" : "visible";
+      
+      if (map.current?.getLayer("traffic-layer")) {
+        map.current.setLayoutProperty("traffic-layer", "visibility", visibility);
+      }
+      if (map.current?.getLayer("traffic-layer-outline")) {
+        map.current.setLayoutProperty("traffic-layer-outline", "visibility", visibility);
+      }
+      if (map.current?.getLayer("traffic-pulse")) {
+        map.current.setLayoutProperty("traffic-pulse", "visibility", visibility);
+      }
+
+      setShowTrafficLayer(!showTrafficLayer);
+      setTrafficLoading(false);
+    }, 500);
+  }, [showTrafficLayer]);
+
+  // Re-add traffic layers after style change
+  useEffect(() => {
+    if (!map.current) return;
+    
+    const handleStyleData = () => {
+      addTrafficLayerSources();
+      if (showTrafficLayer) {
+        setTimeout(() => {
+          if (map.current?.getLayer("traffic-layer")) {
+            map.current.setLayoutProperty("traffic-layer", "visibility", "visible");
+          }
+          if (map.current?.getLayer("traffic-layer-outline")) {
+            map.current.setLayoutProperty("traffic-layer-outline", "visibility", "visible");
+          }
+          if (map.current?.getLayer("traffic-pulse")) {
+            map.current.setLayoutProperty("traffic-pulse", "visibility", "visible");
+          }
+        }, 100);
+      }
+    };
+
+    map.current.on("styledata", handleStyleData);
+    return () => {
+      map.current?.off("styledata", handleStyleData);
+    };
+  }, [showTrafficLayer, addTrafficLayerSources]);
 
   const clearRoute = () => {
     if (map.current) {
@@ -1644,6 +1837,25 @@ const MapViewer = () => {
               >
                 <Compass className="w-5 h-5" />
               </button>
+
+              {/* Traffic Layer Toggle */}
+              <button
+                onClick={toggleTrafficLayer}
+                disabled={trafficLoading}
+                className={`p-2.5 backdrop-blur-sm rounded-lg shadow-lg transition-all border ${
+                  showTrafficLayer 
+                    ? "bg-amber-500 text-white border-amber-500" 
+                    : "bg-white/95 border-gray-200 hover:bg-amber-500 hover:text-white"
+                }`}
+                title={showTrafficLayer ? "Hide Traffic" : "Show Traffic"}
+              >
+                {trafficLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Activity className="w-5 h-5" />
+                )}
+              </button>
+
               <button
                 className="p-2.5 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg hover:bg-primary hover:text-white transition-all border border-gray-200"
                 title="Layers"
@@ -1651,6 +1863,42 @@ const MapViewer = () => {
                 <Layers className="w-5 h-5" />
               </button>
             </div>
+
+            {/* Traffic Legend */}
+            <AnimatePresence>
+              {showTrafficLayer && (
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  className="absolute right-4 bottom-48 z-10"
+                >
+                  <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200 p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Activity className="w-4 h-4 text-amber-500" />
+                      <span className="text-xs font-semibold text-gray-700">Traffic Conditions</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-1.5 rounded-full bg-green-500" />
+                        <span className="text-xs text-gray-600">Light Traffic</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-1.5 rounded-full bg-amber-500" />
+                        <span className="text-xs text-gray-600">Moderate Traffic</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-1.5 rounded-full bg-red-500" />
+                        <span className="text-xs text-gray-600">Heavy Traffic</span>
+                      </div>
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-gray-100">
+                      <span className="text-[10px] text-gray-400">Simulated data for demo</span>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* GPS Tracking Info Panel */}
             <AnimatePresence>
