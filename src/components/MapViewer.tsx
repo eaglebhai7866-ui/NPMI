@@ -40,6 +40,8 @@ import {
   Mountain,
   MapPinned,
   Landmark,
+  RadioTower,
+  Target,
 } from "lucide-react";
 
 // Search result interface
@@ -239,6 +241,14 @@ const MapViewer = () => {
   const [showSearchResults, setShowSearchResults] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // GPS Tracking state
+  const [isTracking, setIsTracking] = useState(false);
+  const [isFollowMode, setIsFollowMode] = useState(true);
+  const [userLocation, setUserLocation] = useState<{ lng: number; lat: number; heading?: number; speed?: number } | null>(null);
+  const [distanceToNextStep, setDistanceToNextStep] = useState<number | null>(null);
+  const watchIdRef = useRef<number | null>(null);
+  const lastAnnouncedStepRef = useRef<number>(-1);
 
   // Initialize voice guidance
   useEffect(() => {
@@ -570,6 +580,183 @@ const MapViewer = () => {
     }
   };
 
+  // Calculate distance between two points (Haversine formula)
+  const calculateDistance = useCallback((lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371e3; // Earth's radius in meters
+    const φ1 = (lat1 * Math.PI) / 180;
+    const φ2 = (lat2 * Math.PI) / 180;
+    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+              Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c;
+  }, []);
+
+  // Find closest step to user location
+  const findClosestStep = useCallback((userLat: number, userLng: number): { index: number; distance: number } | null => {
+    if (!routeInfo || routeInfo.steps.length === 0) return null;
+
+    let closestIndex = 0;
+    let closestDistance = Infinity;
+
+    routeInfo.steps.forEach((step, index) => {
+      if (step.maneuver.location) {
+        const distance = calculateDistance(
+          userLat, userLng,
+          step.maneuver.location[1], step.maneuver.location[0]
+        );
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestIndex = index;
+        }
+      }
+    });
+
+    return { index: closestIndex, distance: closestDistance };
+  }, [routeInfo, calculateDistance]);
+
+  // Update user marker with heading indicator
+  const updateUserMarkerWithHeading = useCallback((lngLat: [number, number], heading?: number) => {
+    if (!map.current) return;
+
+    // Remove existing marker
+    if (userMarker.current) {
+      userMarker.current.remove();
+    }
+
+    const el = document.createElement("div");
+    el.innerHTML = `
+      <div class="relative" style="transform: rotate(${heading || 0}deg);">
+        <div class="absolute -inset-4 bg-blue-500/20 rounded-full animate-pulse"></div>
+        ${heading !== undefined ? `
+          <div class="absolute -top-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-r-[6px] border-b-[12px] border-l-transparent border-r-transparent border-b-blue-500"></div>
+        ` : ''}
+        <div class="relative w-6 h-6 bg-blue-500 rounded-full border-3 border-white shadow-lg flex items-center justify-center">
+          <div class="w-2 h-2 bg-white rounded-full"></div>
+        </div>
+      </div>
+    `;
+
+    userMarker.current = new maplibregl.Marker({ element: el, rotationAlignment: 'map' })
+      .setLngLat(lngLat)
+      .addTo(map.current);
+  }, []);
+
+  // Start real-time GPS tracking
+  const startTracking = useCallback(() => {
+    if (!navigator.geolocation) {
+      setLocationError("Geolocation is not supported");
+      return;
+    }
+
+    setIsTracking(true);
+    setLocationError(null);
+
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (position) => {
+        const { longitude, latitude, heading, speed } = position.coords;
+        
+        setUserLocation({
+          lng: longitude,
+          lat: latitude,
+          heading: heading ?? undefined,
+          speed: speed ?? undefined,
+        });
+
+        // Update marker with heading
+        updateUserMarkerWithHeading([longitude, latitude], heading ?? undefined);
+
+        // Follow user if in follow mode
+        if (map.current && isFollowMode) {
+          map.current.easeTo({
+            center: [longitude, latitude],
+            zoom: Math.max(map.current.getZoom(), 15),
+            bearing: heading ?? map.current.getBearing(),
+            duration: 500,
+          });
+        }
+
+        // Update navigation step if we have a route
+        if (routeInfo && routeInfo.steps.length > 0) {
+          const closest = findClosestStep(latitude, longitude);
+          
+          if (closest) {
+            setDistanceToNextStep(closest.distance);
+
+            // Check if user has passed the current step and moved to the next
+            if (closest.index > currentStepIndex && closest.index < routeInfo.steps.length) {
+              setCurrentStepIndex(closest.index);
+            }
+
+            // Announce upcoming step when within 100m and not already announced
+            if (closest.distance < 100 && closest.index !== lastAnnouncedStepRef.current) {
+              const step = routeInfo.steps[closest.index];
+              if (voiceGuidance.current?.isEnabled() && step) {
+                voiceGuidance.current.speak(`In ${Math.round(closest.distance)} meters, ${step.instruction}`);
+                lastAnnouncedStepRef.current = closest.index;
+              }
+            }
+
+            // Announce when very close (within 30m) to maneuver point
+            if (closest.distance < 30 && closest.index === currentStepIndex) {
+              const step = routeInfo.steps[closest.index];
+              if (voiceGuidance.current?.isEnabled() && step) {
+                voiceGuidance.current.speak(step.instruction);
+              }
+            }
+
+            // Check if arrived at destination
+            if (closest.index === routeInfo.steps.length - 1 && closest.distance < 50) {
+              if (voiceGuidance.current?.isEnabled()) {
+                voiceGuidance.current.speak("You have arrived at your destination");
+              }
+            }
+          }
+        }
+      },
+      (error) => {
+        setLocationError(error.message);
+        setIsTracking(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 1000, // Update every second
+      }
+    );
+  }, [isFollowMode, routeInfo, currentStepIndex, findClosestStep, updateUserMarkerWithHeading]);
+
+  // Stop GPS tracking
+  const stopTracking = useCallback(() => {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    setIsTracking(false);
+    setUserLocation(null);
+    setDistanceToNextStep(null);
+  }, []);
+
+  // Toggle tracking
+  const toggleTracking = useCallback(() => {
+    if (isTracking) {
+      stopTracking();
+    } else {
+      startTracking();
+    }
+  }, [isTracking, startTracking, stopTracking]);
+
+  // Cleanup tracking on unmount
+  useEffect(() => {
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+    };
+  }, []);
   // Search functionality with Nominatim API
   const searchPlaces = useCallback(async (query: string) => {
     if (query.length < 2) {
@@ -1403,18 +1590,51 @@ const MapViewer = () => {
               >
                 <Route className="w-5 h-5" />
               </button>
+
+              {/* GPS Tracking Toggle */}
+              <button
+                onClick={toggleTracking}
+                className={`p-2.5 backdrop-blur-sm rounded-lg shadow-lg transition-all border ${
+                  isTracking 
+                    ? "bg-blue-500 text-white border-blue-500" 
+                    : "bg-white/95 border-gray-200 hover:bg-blue-500 hover:text-white"
+                }`}
+                title={isTracking ? "Stop GPS Tracking" : "Start GPS Tracking"}
+              >
+                {isTracking ? (
+                  <RadioTower className="w-5 h-5 animate-pulse" />
+                ) : (
+                  <LocateFixed className="w-5 h-5" />
+                )}
+              </button>
+
+              {/* Follow Mode Toggle (only show when tracking) */}
+              {isTracking && (
+                <button
+                  onClick={() => setIsFollowMode(!isFollowMode)}
+                  className={`p-2.5 backdrop-blur-sm rounded-lg shadow-lg transition-all border ${
+                    isFollowMode 
+                      ? "bg-green-500 text-white border-green-500" 
+                      : "bg-white/95 border-gray-200 hover:bg-green-500 hover:text-white"
+                  }`}
+                  title={isFollowMode ? "Disable Auto-Follow" : "Enable Auto-Follow"}
+                >
+                  <Target className="w-5 h-5" />
+                </button>
+              )}
+
               <button
                 onClick={handleLocateUser}
-                disabled={isLocating}
+                disabled={isLocating || isTracking}
                 className={`p-2.5 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg transition-all border border-gray-200 ${
-                  isLocating ? "bg-blue-50" : "hover:bg-primary hover:text-white"
+                  isLocating ? "bg-blue-50" : isTracking ? "opacity-50 cursor-not-allowed" : "hover:bg-primary hover:text-white"
                 }`}
-                title="My Location"
+                title="Center on My Location"
               >
                 {isLocating ? (
                   <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
                 ) : (
-                  <LocateFixed className="w-5 h-5" />
+                  <Navigation className="w-5 h-5" />
                 )}
               </button>
               <button
@@ -1422,7 +1642,7 @@ const MapViewer = () => {
                 className="p-2.5 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg hover:bg-primary hover:text-white transition-all border border-gray-200"
                 title="Reset to Pakistan"
               >
-                <Navigation className="w-5 h-5" />
+                <Compass className="w-5 h-5" />
               </button>
               <button
                 className="p-2.5 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg hover:bg-primary hover:text-white transition-all border border-gray-200"
@@ -1431,6 +1651,73 @@ const MapViewer = () => {
                 <Layers className="w-5 h-5" />
               </button>
             </div>
+
+            {/* GPS Tracking Info Panel */}
+            <AnimatePresence>
+              {isTracking && userLocation && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 20 }}
+                  className="absolute right-4 bottom-20 z-10"
+                >
+                  <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200 p-3 min-w-[180px]">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                      <span className="text-xs font-medium text-green-600">GPS Active</span>
+                    </div>
+                    
+                    <div className="space-y-1 text-xs text-gray-600">
+                      <div className="flex justify-between">
+                        <span>Lat:</span>
+                        <span className="font-mono">{userLocation.lat.toFixed(5)}°</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Lng:</span>
+                        <span className="font-mono">{userLocation.lng.toFixed(5)}°</span>
+                      </div>
+                      {userLocation.speed !== undefined && userLocation.speed > 0 && (
+                        <div className="flex justify-between">
+                          <span>Speed:</span>
+                          <span className="font-mono">{(userLocation.speed * 3.6).toFixed(1)} km/h</span>
+                        </div>
+                      )}
+                      {userLocation.heading !== undefined && (
+                        <div className="flex justify-between">
+                          <span>Heading:</span>
+                          <span className="font-mono">{Math.round(userLocation.heading)}°</span>
+                        </div>
+                      )}
+                      {distanceToNextStep !== null && routeInfo && (
+                        <div className="flex justify-between border-t border-gray-100 pt-1 mt-1">
+                          <span>Next Turn:</span>
+                          <span className="font-semibold text-primary">{formatDistance(distanceToNextStep)}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex gap-1 mt-2">
+                      <button
+                        onClick={() => setIsFollowMode(!isFollowMode)}
+                        className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                          isFollowMode 
+                            ? "bg-green-100 text-green-700" 
+                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                        }`}
+                      >
+                        {isFollowMode ? "Following" : "Free Move"}
+                      </button>
+                      <button
+                        onClick={stopTracking}
+                        className="px-2 py-1.5 text-xs font-medium bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                      >
+                        Stop
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Location Error Toast */}
             {locationError && (
