@@ -50,6 +50,9 @@ import {
   Filter,
   Eye,
   EyeOff,
+  PenTool,
+  Square,
+  Trash2,
 } from "lucide-react";
 
 // Search result interface
@@ -284,6 +287,13 @@ const MapViewer = () => {
   const [pois, setPois] = useState<POI[]>([]);
   const [isLoadingPOIs, setIsLoadingPOIs] = useState(false);
   const poiMarkersRef = useRef<maplibregl.Marker[]>([]);
+
+  // Measurement state
+  type MeasureMode = "none" | "distance" | "area";
+  const [measureMode, setMeasureMode] = useState<MeasureMode>("none");
+  const [measurePoints, setMeasurePoints] = useState<[number, number][]>([]);
+  const [measureResult, setMeasureResult] = useState<{ distance?: number; area?: number } | null>(null);
+  const measureMarkersRef = useRef<maplibregl.Marker[]>([]);
 
   // Initialize voice guidance
   useEffect(() => {
@@ -921,6 +931,211 @@ const MapViewer = () => {
       map.current?.off('moveend', handleMoveEnd);
     };
   }, [activePOICategories, refreshPOIs]);
+
+  // Calculate polygon area using Shoelace formula (in square meters)
+  const calculatePolygonArea = useCallback((points: [number, number][]): number => {
+    if (points.length < 3) return 0;
+    
+    // Convert to meters using approximate conversion at the center latitude
+    const centerLat = points.reduce((sum, p) => sum + p[1], 0) / points.length;
+    const latToMeters = 111320; // meters per degree latitude
+    const lngToMeters = 111320 * Math.cos((centerLat * Math.PI) / 180); // meters per degree longitude
+    
+    // Convert points to meters
+    const metersPoints = points.map(([lng, lat]) => [
+      lng * lngToMeters,
+      lat * latToMeters
+    ]);
+    
+    // Shoelace formula
+    let area = 0;
+    for (let i = 0; i < metersPoints.length; i++) {
+      const j = (i + 1) % metersPoints.length;
+      area += metersPoints[i][0] * metersPoints[j][1];
+      area -= metersPoints[j][0] * metersPoints[i][1];
+    }
+    
+    return Math.abs(area) / 2;
+  }, []);
+
+  // Calculate total distance of a line (in meters) - inline Haversine calculation
+  const calculateLineDistance = useCallback((points: [number, number][]): number => {
+    if (points.length < 2) return 0;
+    
+    const haversine = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+      const R = 6371e3; // Earth's radius in meters
+      const φ1 = (lat1 * Math.PI) / 180;
+      const φ2 = (lat2 * Math.PI) / 180;
+      const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+      const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+      const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    };
+    
+    let totalDistance = 0;
+    for (let i = 0; i < points.length - 1; i++) {
+      totalDistance += haversine(
+        points[i][1], points[i][0],
+        points[i + 1][1], points[i + 1][0]
+      );
+    }
+    return totalDistance;
+  }, []);
+
+  // Toggle measurement mode
+  const toggleMeasureMode = useCallback((mode: MeasureMode) => {
+    if (measureMode === mode) {
+      // Turn off measurement
+      setMeasureMode("none");
+      clearMeasurement();
+    } else {
+      // Switch to new mode
+      setMeasureMode(mode);
+      clearMeasurement();
+    }
+  }, [measureMode]);
+
+  // Clear measurement
+  const clearMeasurement = useCallback(() => {
+    setMeasurePoints([]);
+    setMeasureResult(null);
+    
+    // Remove markers
+    measureMarkersRef.current.forEach(marker => marker.remove());
+    measureMarkersRef.current = [];
+    
+    // Remove map layers/sources
+    if (map.current) {
+      if (map.current.getLayer("measure-line")) {
+        map.current.removeLayer("measure-line");
+      }
+      if (map.current.getLayer("measure-fill")) {
+        map.current.removeLayer("measure-fill");
+      }
+      if (map.current.getSource("measure-geojson")) {
+        map.current.removeSource("measure-geojson");
+      }
+    }
+  }, []);
+
+  // Update measurement visualization
+  const updateMeasurementVisualization = useCallback((points: [number, number][]) => {
+    if (!map.current || points.length === 0) return;
+
+    const geojsonData: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features: []
+    };
+
+    if (measureMode === "distance" && points.length >= 2) {
+      geojsonData.features.push({
+        type: "Feature",
+        properties: {},
+        geometry: {
+          type: "LineString",
+          coordinates: points
+        }
+      });
+    } else if (measureMode === "area" && points.length >= 3) {
+      geojsonData.features.push({
+        type: "Feature",
+        properties: {},
+        geometry: {
+          type: "Polygon",
+          coordinates: [[...points, points[0]]]
+        }
+      });
+    }
+
+    if (!map.current.getSource("measure-geojson")) {
+      map.current.addSource("measure-geojson", {
+        type: "geojson",
+        data: geojsonData
+      });
+
+      // Add fill layer for area
+      map.current.addLayer({
+        id: "measure-fill",
+        type: "fill",
+        source: "measure-geojson",
+        paint: {
+          "fill-color": "#8b5cf6",
+          "fill-opacity": 0.2
+        }
+      });
+
+      // Add line layer
+      map.current.addLayer({
+        id: "measure-line",
+        type: "line",
+        source: "measure-geojson",
+        paint: {
+          "line-color": "#8b5cf6",
+          "line-width": 3,
+          "line-dasharray": [2, 1]
+        }
+      });
+    } else {
+      (map.current.getSource("measure-geojson") as maplibregl.GeoJSONSource).setData(geojsonData);
+    }
+  }, [measureMode]);
+
+  // Handle map click for measurement
+  useEffect(() => {
+    if (!map.current || measureMode === "none") return;
+
+    const handleClick = (e: maplibregl.MapMouseEvent) => {
+      const point: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+      
+      setMeasurePoints(prev => {
+        const newPoints = [...prev, point];
+        
+        // Add marker for the point
+        const el = document.createElement("div");
+        el.innerHTML = `
+          <div class="w-4 h-4 bg-purple-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center">
+            <span class="text-[8px] text-white font-bold">${newPoints.length}</span>
+          </div>
+        `;
+        
+        const marker = new maplibregl.Marker({ element: el })
+          .setLngLat(point)
+          .addTo(map.current!);
+        
+        measureMarkersRef.current.push(marker);
+        
+        // Calculate result
+        if (measureMode === "distance" && newPoints.length >= 2) {
+          setMeasureResult({ distance: calculateLineDistance(newPoints) });
+        } else if (measureMode === "area" && newPoints.length >= 3) {
+          setMeasureResult({ area: calculatePolygonArea(newPoints) });
+        }
+        
+        // Update visualization
+        updateMeasurementVisualization(newPoints);
+        
+        return newPoints;
+      });
+    };
+
+    map.current.on("click", handleClick);
+
+    return () => {
+      map.current?.off("click", handleClick);
+    };
+  }, [measureMode, calculateLineDistance, calculatePolygonArea, updateMeasurementVisualization]);
+
+  // Format area for display
+  const formatArea = (sqMeters: number): string => {
+    if (sqMeters >= 1000000) {
+      return `${(sqMeters / 1000000).toFixed(2)} km²`;
+    } else if (sqMeters >= 10000) {
+      return `${(sqMeters / 10000).toFixed(2)} ha`;
+    }
+    return `${sqMeters.toFixed(0)} m²`;
+  };
 
   const clearRoute = () => {
     if (map.current) {
@@ -2063,6 +2278,32 @@ const MapViewer = () => {
                 )}
               </button>
 
+              {/* Measurement Tools */}
+              <div className="flex flex-col gap-1 p-1 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg border border-gray-200">
+                <button
+                  onClick={() => toggleMeasureMode("distance")}
+                  className={`p-2 rounded-md transition-all ${
+                    measureMode === "distance" 
+                      ? "bg-indigo-500 text-white" 
+                      : "hover:bg-gray-100"
+                  }`}
+                  title="Measure Distance"
+                >
+                  <Ruler className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => toggleMeasureMode("area")}
+                  className={`p-2 rounded-md transition-all ${
+                    measureMode === "area" 
+                      ? "bg-indigo-500 text-white" 
+                      : "hover:bg-gray-100"
+                  }`}
+                  title="Measure Area"
+                >
+                  <Square className="w-5 h-5" />
+                </button>
+              </div>
+
               <button
                 className="p-2.5 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg hover:bg-primary hover:text-white transition-all border border-gray-200"
                 title="Layers"
@@ -2070,6 +2311,85 @@ const MapViewer = () => {
                 <Layers className="w-5 h-5" />
               </button>
             </div>
+
+            {/* Measurement Panel */}
+            <AnimatePresence>
+              {measureMode !== "none" && (
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  className="absolute left-20 bottom-36 z-10"
+                >
+                  <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200 p-3 min-w-[220px]">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        {measureMode === "distance" ? (
+                          <Ruler className="w-4 h-4 text-indigo-500" />
+                        ) : (
+                          <Square className="w-4 h-4 text-indigo-500" />
+                        )}
+                        <span className="text-sm font-semibold text-gray-700">
+                          {measureMode === "distance" ? "Distance Measurement" : "Area Measurement"}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => toggleMeasureMode("none")}
+                        className="p-1 hover:bg-gray-100 rounded"
+                      >
+                        <X className="w-4 h-4 text-gray-400" />
+                      </button>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <p className="text-xs text-gray-500">
+                        {measureMode === "distance" 
+                          ? "Click on the map to add points. The total distance will be calculated."
+                          : "Click on the map to add at least 3 points to calculate the area."
+                        }
+                      </p>
+                      
+                      {measurePoints.length > 0 && (
+                        <div className="flex items-center gap-2 text-xs text-gray-600">
+                          <PenTool className="w-3 h-3" />
+                          <span>{measurePoints.length} point{measurePoints.length !== 1 ? 's' : ''} placed</span>
+                        </div>
+                      )}
+
+                      {measureResult && (
+                        <div className="p-3 bg-indigo-50 rounded-lg">
+                          <div className="text-xs text-indigo-600 font-medium mb-1">
+                            {measureMode === "distance" ? "Total Distance" : "Total Area"}
+                          </div>
+                          <div className="text-xl font-bold text-indigo-700">
+                            {measureMode === "distance" && measureResult.distance !== undefined
+                              ? formatDistance(measureResult.distance)
+                              : measureResult.area !== undefined
+                              ? formatArea(measureResult.area)
+                              : "-"
+                            }
+                          </div>
+                        </div>
+                      )}
+
+                      {measurePoints.length > 0 && (
+                        <button
+                          onClick={clearMeasurement}
+                          className="w-full flex items-center justify-center gap-2 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Clear Measurement
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                      <span className="text-[10px] text-gray-400">Click map to add measurement points</span>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* POI Filter Panel */}
             <AnimatePresence>
@@ -2299,21 +2619,28 @@ const MapViewer = () => {
             <div className="flex items-center gap-2">
               <Search className="w-5 h-5 text-primary" />
               <span className="text-sm text-muted-foreground">
-                <strong className="text-foreground">Search</strong> for any place in Pakistan
+                <strong className="text-foreground">Search</strong> places
               </span>
             </div>
             <span className="text-muted-foreground hidden sm:inline">•</span>
             <div className="flex items-center gap-2">
               <Route className="w-5 h-5 text-primary" />
               <span className="text-sm text-muted-foreground">
-                Use <strong className="text-foreground">Route</strong> to plan navigation
+                <strong className="text-foreground">Route</strong> navigation
               </span>
             </div>
             <span className="text-muted-foreground hidden sm:inline">•</span>
             <div className="flex items-center gap-2">
               <MapPin className="w-5 h-5 text-purple-500" />
               <span className="text-sm text-muted-foreground">
-                Find <strong className="text-foreground">POIs</strong> like hospitals, schools, fuel
+                <strong className="text-foreground">POIs</strong>
+              </span>
+            </div>
+            <span className="text-muted-foreground hidden sm:inline">•</span>
+            <div className="flex items-center gap-2">
+              <Ruler className="w-5 h-5 text-indigo-500" />
+              <span className="text-sm text-muted-foreground">
+                <strong className="text-foreground">Measure</strong> distance & area
               </span>
             </div>
           </div>
