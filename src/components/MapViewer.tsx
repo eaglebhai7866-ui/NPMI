@@ -43,6 +43,13 @@ import {
   RadioTower,
   Target,
   Activity,
+  Hospital,
+  GraduationCap,
+  Fuel,
+  Utensils,
+  Filter,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 // Search result interface
@@ -58,6 +65,22 @@ interface SearchResult {
 
 type MapStyle = "streets" | "satellite" | "terrain";
 type TravelMode = "driving" | "cycling" | "walking";
+type POICategory = "hospital" | "school" | "fuel" | "restaurant";
+
+interface POI {
+  id: number;
+  type: POICategory;
+  name: string;
+  lat: number;
+  lon: number;
+}
+
+const poiCategories: Record<POICategory, { name: string; icon: typeof Hospital; color: string; query: string }> = {
+  hospital: { name: "Hospitals", icon: Hospital, color: "#ef4444", query: "amenity=hospital" },
+  school: { name: "Schools", icon: GraduationCap, color: "#3b82f6", query: "amenity=school" },
+  fuel: { name: "Fuel Stations", icon: Fuel, color: "#f59e0b", query: "amenity=fuel" },
+  restaurant: { name: "Restaurants", icon: Utensils, color: "#22c55e", query: "amenity=restaurant" },
+};
 
 const mapStyles: Record<MapStyle, { name: string; url: string }> = {
   streets: {
@@ -254,6 +277,13 @@ const MapViewer = () => {
   // Traffic layer state
   const [showTrafficLayer, setShowTrafficLayer] = useState(false);
   const [trafficLoading, setTrafficLoading] = useState(false);
+
+  // POI layer state
+  const [showPOIPanel, setShowPOIPanel] = useState(false);
+  const [activePOICategories, setActivePOICategories] = useState<Set<POICategory>>(new Set());
+  const [pois, setPois] = useState<POI[]>([]);
+  const [isLoadingPOIs, setIsLoadingPOIs] = useState(false);
+  const poiMarkersRef = useRef<maplibregl.Marker[]>([]);
 
   // Initialize voice guidance
   useEffect(() => {
@@ -731,6 +761,166 @@ const MapViewer = () => {
       map.current?.off("styledata", handleStyleData);
     };
   }, [showTrafficLayer, addTrafficLayerSources]);
+
+  // Fetch POIs from Overpass API
+  const fetchPOIs = useCallback(async (category: POICategory) => {
+    if (!map.current) return [];
+
+    const bounds = map.current.getBounds();
+    const bbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
+    
+    const query = `
+      [out:json][timeout:25];
+      (
+        node[${poiCategories[category].query}](${bbox});
+        way[${poiCategories[category].query}](${bbox});
+      );
+      out center 50;
+    `;
+
+    try {
+      const response = await fetch('https://overpass-api.de/api/interpreter', {
+        method: 'POST',
+        body: `data=${encodeURIComponent(query)}`,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      });
+
+      const data = await response.json();
+      
+      return data.elements.map((element: any) => ({
+        id: element.id,
+        type: category,
+        name: element.tags?.name || `Unnamed ${poiCategories[category].name.slice(0, -1)}`,
+        lat: element.lat || element.center?.lat,
+        lon: element.lon || element.center?.lon,
+      })).filter((poi: POI) => poi.lat && poi.lon);
+    } catch (error) {
+      console.error(`Error fetching ${category} POIs:`, error);
+      return [];
+    }
+  }, []);
+
+  // Toggle POI category
+  const togglePOICategory = useCallback(async (category: POICategory) => {
+    const newCategories = new Set(activePOICategories);
+    
+    if (newCategories.has(category)) {
+      // Remove category
+      newCategories.delete(category);
+      setActivePOICategories(newCategories);
+      
+      // Remove markers for this category
+      const remainingPois = pois.filter(poi => poi.type !== category);
+      setPois(remainingPois);
+    } else {
+      // Add category
+      newCategories.add(category);
+      setActivePOICategories(newCategories);
+      
+      setIsLoadingPOIs(true);
+      const newPOIs = await fetchPOIs(category);
+      setPois(prev => [...prev, ...newPOIs]);
+      setIsLoadingPOIs(false);
+    }
+  }, [activePOICategories, pois, fetchPOIs]);
+
+  // Refresh all active POIs
+  const refreshPOIs = useCallback(async () => {
+    if (activePOICategories.size === 0) return;
+    
+    setIsLoadingPOIs(true);
+    const allPOIs: POI[] = [];
+    
+    for (const category of activePOICategories) {
+      const categoryPOIs = await fetchPOIs(category);
+      allPOIs.push(...categoryPOIs);
+    }
+    
+    setPois(allPOIs);
+    setIsLoadingPOIs(false);
+  }, [activePOICategories, fetchPOIs]);
+
+  // Update POI markers when POIs change
+  useEffect(() => {
+    if (!map.current) return;
+
+    // Clear existing POI markers
+    poiMarkersRef.current.forEach(marker => marker.remove());
+    poiMarkersRef.current = [];
+
+    // Add new markers
+    pois.forEach(poi => {
+      const category = poiCategories[poi.type];
+      const el = document.createElement("div");
+      el.innerHTML = `
+        <div class="relative group cursor-pointer">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center shadow-lg border-2 border-white" style="background-color: ${category.color}">
+            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              ${getPOIIconSVG(poi.type)}
+            </svg>
+          </div>
+          <div class="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+            <div class="bg-gray-900/90 text-white text-xs px-2 py-1 rounded shadow-lg max-w-[200px] truncate">
+              ${poi.name}
+            </div>
+          </div>
+        </div>
+      `;
+
+      const marker = new maplibregl.Marker({ element: el })
+        .setLngLat([poi.lon, poi.lat])
+        .setPopup(
+          new maplibregl.Popup({ offset: 25 }).setHTML(`
+            <div class="p-2">
+              <div class="font-semibold text-sm">${poi.name}</div>
+              <div class="text-xs text-gray-500 mt-1 capitalize">${poi.type}</div>
+            </div>
+          `)
+        )
+        .addTo(map.current!);
+
+      poiMarkersRef.current.push(marker);
+    });
+  }, [pois]);
+
+  // Helper function to get SVG path for POI icons
+  const getPOIIconSVG = (type: POICategory): string => {
+    switch (type) {
+      case "hospital":
+        return '<path d="M8 21h8m-4-9v9m-6-3h12a2 2 0 002-2V5a2 2 0 00-2-2H6a2 2 0 00-2 2v11a2 2 0 002 2z"/><path d="M9 7h6m-3-3v6"/>';
+      case "school":
+        return '<path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>';
+      case "fuel":
+        return '<path d="M3 22V6a2 2 0 012-2h8a2 2 0 012 2v16m0-16l4 4v10a2 2 0 01-2 2M7 8h4m-2 0v4"/>';
+      case "restaurant":
+        return '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 002-2V2M7 2v20m14-18v4a4 4 0 01-4 4h-1v10"/>';
+      default:
+        return '<circle cx="12" cy="12" r="3"/>';
+    }
+  };
+
+  // Refresh POIs when map moves (debounced)
+  useEffect(() => {
+    if (!map.current || activePOICategories.size === 0) return;
+
+    let timeoutId: NodeJS.Timeout;
+    
+    const handleMoveEnd = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        refreshPOIs();
+      }, 500);
+    };
+
+    map.current.on('moveend', handleMoveEnd);
+    
+    return () => {
+      clearTimeout(timeoutId);
+      map.current?.off('moveend', handleMoveEnd);
+    };
+  }, [activePOICategories, refreshPOIs]);
 
   const clearRoute = () => {
     if (map.current) {
@@ -1856,6 +2046,23 @@ const MapViewer = () => {
                 )}
               </button>
 
+              {/* POI Layer Toggle */}
+              <button
+                onClick={() => setShowPOIPanel(!showPOIPanel)}
+                className={`p-2.5 backdrop-blur-sm rounded-lg shadow-lg transition-all border ${
+                  showPOIPanel || activePOICategories.size > 0
+                    ? "bg-purple-500 text-white border-purple-500" 
+                    : "bg-white/95 border-gray-200 hover:bg-purple-500 hover:text-white"
+                }`}
+                title="Points of Interest"
+              >
+                {isLoadingPOIs ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <MapPin className="w-5 h-5" />
+                )}
+              </button>
+
               <button
                 className="p-2.5 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg hover:bg-primary hover:text-white transition-all border border-gray-200"
                 title="Layers"
@@ -1863,6 +2070,93 @@ const MapViewer = () => {
                 <Layers className="w-5 h-5" />
               </button>
             </div>
+
+            {/* POI Filter Panel */}
+            <AnimatePresence>
+              {showPOIPanel && (
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  className="absolute left-20 bottom-20 z-10"
+                >
+                  <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200 p-3 min-w-[200px]">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Filter className="w-4 h-4 text-purple-500" />
+                        <span className="text-sm font-semibold text-gray-700">Points of Interest</span>
+                      </div>
+                      <button
+                        onClick={() => setShowPOIPanel(false)}
+                        className="p-1 hover:bg-gray-100 rounded"
+                      >
+                        <X className="w-4 h-4 text-gray-400" />
+                      </button>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      {(Object.entries(poiCategories) as [POICategory, typeof poiCategories[POICategory]][]).map(([key, category]) => {
+                        const Icon = category.icon;
+                        const isActive = activePOICategories.has(key);
+                        
+                        return (
+                          <button
+                            key={key}
+                            onClick={() => togglePOICategory(key)}
+                            disabled={isLoadingPOIs}
+                            className={`w-full flex items-center gap-3 p-2.5 rounded-lg transition-all ${
+                              isActive 
+                                ? "bg-gray-100" 
+                                : "hover:bg-gray-50"
+                            }`}
+                          >
+                            <div 
+                              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                                isActive ? "" : "bg-gray-100"
+                              }`}
+                              style={{ backgroundColor: isActive ? category.color : undefined }}
+                            >
+                              <Icon className={`w-4 h-4 ${isActive ? "text-white" : "text-gray-500"}`} />
+                            </div>
+                            <span className={`text-sm font-medium ${isActive ? "text-gray-900" : "text-gray-600"}`}>
+                              {category.name}
+                            </span>
+                            <div className="ml-auto">
+                              {isActive ? (
+                                <Eye className="w-4 h-4 text-gray-400" />
+                              ) : (
+                                <EyeOff className="w-4 h-4 text-gray-300" />
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {activePOICategories.size > 0 && (
+                      <div className="mt-3 pt-3 border-t border-gray-100">
+                        <div className="flex items-center justify-between text-xs text-gray-500">
+                          <span>{pois.length} places visible</span>
+                          <button
+                            onClick={() => {
+                              setActivePOICategories(new Set());
+                              setPois([]);
+                            }}
+                            className="text-red-500 hover:text-red-600 font-medium"
+                          >
+                            Clear All
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                      <span className="text-[10px] text-gray-400">Data from OpenStreetMap</span>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Traffic Legend */}
             <AnimatePresence>
@@ -2013,6 +2307,13 @@ const MapViewer = () => {
               <Route className="w-5 h-5 text-primary" />
               <span className="text-sm text-muted-foreground">
                 Use <strong className="text-foreground">Route</strong> to plan navigation
+              </span>
+            </div>
+            <span className="text-muted-foreground hidden sm:inline">•</span>
+            <div className="flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-purple-500" />
+              <span className="text-sm text-muted-foreground">
+                Find <strong className="text-foreground">POIs</strong> like hospitals, schools, fuel
               </span>
             </div>
           </div>
