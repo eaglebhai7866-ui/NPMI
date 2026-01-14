@@ -53,7 +53,9 @@ import {
   PenTool,
   Square,
   Trash2,
+  TrendingUp,
 } from "lucide-react";
+import ElevationProfile from "./ElevationProfile";
 
 // Search result interface
 interface SearchResult {
@@ -294,6 +296,15 @@ const MapViewer = () => {
   const [measurePoints, setMeasurePoints] = useState<[number, number][]>([]);
   const [measureResult, setMeasureResult] = useState<{ distance?: number; area?: number } | null>(null);
   const measureMarkersRef = useRef<maplibregl.Marker[]>([]);
+
+  // Elevation profile state
+  interface ElevationPoint {
+    distance: number;
+    elevation: number;
+  }
+  const [showElevationProfile, setShowElevationProfile] = useState(false);
+  const [elevationData, setElevationData] = useState<ElevationPoint[]>([]);
+  const [isLoadingElevation, setIsLoadingElevation] = useState(false);
 
   // Initialize voice guidance
   useEffect(() => {
@@ -1137,6 +1148,73 @@ const MapViewer = () => {
     return `${sqMeters.toFixed(0)} m²`;
   };
 
+  // Fetch elevation data for route
+  const fetchElevationData = useCallback(async (coordinates: [number, number][]) => {
+    if (coordinates.length < 2) return;
+
+    setIsLoadingElevation(true);
+    setShowElevationProfile(true);
+
+    try {
+      // Sample points along the route (max 100 points for API limits)
+      const sampleRate = Math.max(1, Math.floor(coordinates.length / 100));
+      const sampledCoords = coordinates.filter((_, i) => i % sampleRate === 0);
+      
+      // Open-Meteo Elevation API
+      const latitudes = sampledCoords.map(c => c[1]).join(',');
+      const longitudes = sampledCoords.map(c => c[0]).join(',');
+      
+      const response = await fetch(
+        `https://api.open-meteo.com/v1/elevation?latitude=${latitudes}&longitude=${longitudes}`
+      );
+      
+      const data = await response.json();
+      
+      if (data.elevation && Array.isArray(data.elevation)) {
+        // Calculate cumulative distance for each point
+        let cumulativeDistance = 0;
+        const elevationPoints: ElevationPoint[] = data.elevation.map((elevation: number, index: number) => {
+          if (index > 0) {
+            const prevCoord = sampledCoords[index - 1];
+            const currCoord = sampledCoords[index];
+            // Haversine formula for distance
+            const R = 6371; // km
+            const dLat = ((currCoord[1] - prevCoord[1]) * Math.PI) / 180;
+            const dLon = ((currCoord[0] - prevCoord[0]) * Math.PI) / 180;
+            const a =
+              Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos((prevCoord[1] * Math.PI) / 180) *
+                Math.cos((currCoord[1] * Math.PI) / 180) *
+                Math.sin(dLon / 2) *
+                Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            cumulativeDistance += R * c;
+          }
+          return {
+            distance: cumulativeDistance,
+            elevation: elevation,
+          };
+        });
+        
+        setElevationData(elevationPoints);
+      }
+    } catch (error) {
+      console.error("Error fetching elevation data:", error);
+      setElevationData([]);
+    } finally {
+      setIsLoadingElevation(false);
+    }
+  }, []);
+
+  // Toggle elevation profile visibility
+  const toggleElevationProfile = useCallback(() => {
+    if (showElevationProfile) {
+      setShowElevationProfile(false);
+    } else if (routeInfo && routeInfo.geometry.coordinates.length > 0) {
+      fetchElevationData(routeInfo.geometry.coordinates as [number, number][]);
+    }
+  }, [showElevationProfile, routeInfo, fetchElevationData]);
+
   const clearRoute = () => {
     if (map.current) {
       if (map.current.getSource("route")) {
@@ -1158,6 +1236,10 @@ const MapViewer = () => {
     setShowSteps(false);
     setCurrentStepIndex(0);
     voiceGuidance.current?.stop();
+    
+    // Clear elevation data
+    setShowElevationProfile(false);
+    setElevationData([]);
   };
 
   const toggleRoutingMode = () => {
@@ -2046,6 +2128,24 @@ const MapViewer = () => {
                                   )}
                                 </button>
                               </div>
+
+                              {/* Elevation Profile Button */}
+                              <button
+                                onClick={toggleElevationProfile}
+                                disabled={isLoadingElevation}
+                                className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                                  showElevationProfile 
+                                    ? "bg-emerald-500 text-white" 
+                                    : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                                }`}
+                              >
+                                {isLoadingElevation ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <TrendingUp className="w-4 h-4" />
+                                )}
+                                {showElevationProfile ? "Hide Elevation" : "Show Elevation Profile"}
+                              </button>
                             </div>
 
                             {/* Navigation Steps List */}
@@ -2581,6 +2681,18 @@ const MapViewer = () => {
               )}
             </AnimatePresence>
 
+            {/* Elevation Profile */}
+            <AnimatePresence>
+              {showElevationProfile && routeInfo && (
+                <ElevationProfile
+                  routeCoordinates={routeInfo.geometry.coordinates as [number, number][]}
+                  onClose={() => setShowElevationProfile(false)}
+                  isLoading={isLoadingElevation}
+                  elevationData={elevationData}
+                />
+              )}
+            </AnimatePresence>
+
             {/* Location Error Toast */}
             {locationError && (
               <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20">
@@ -2631,6 +2743,13 @@ const MapViewer = () => {
             </div>
             <span className="text-muted-foreground hidden sm:inline">•</span>
             <div className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-emerald-500" />
+              <span className="text-sm text-muted-foreground">
+                <strong className="text-foreground">Elevation</strong> profile
+              </span>
+            </div>
+            <span className="text-muted-foreground hidden sm:inline">•</span>
+            <div className="flex items-center gap-2">
               <MapPin className="w-5 h-5 text-purple-500" />
               <span className="text-sm text-muted-foreground">
                 <strong className="text-foreground">POIs</strong>
@@ -2640,7 +2759,7 @@ const MapViewer = () => {
             <div className="flex items-center gap-2">
               <Ruler className="w-5 h-5 text-indigo-500" />
               <span className="text-sm text-muted-foreground">
-                <strong className="text-foreground">Measure</strong> distance & area
+                <strong className="text-foreground">Measure</strong>
               </span>
             </div>
           </div>
