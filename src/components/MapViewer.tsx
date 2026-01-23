@@ -667,60 +667,36 @@ const MapViewer = () => {
   };
 
   return (
-    <section className="py-20 bg-secondary" id="map-demo">
+    <div className="h-screen w-screen relative">
       <Toaster position="top-center" richColors />
-      <div className="container mx-auto px-6">
-        {/* Section Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-          className="text-center mb-12"
-        >
-          <span className="inline-block px-4 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium mb-4">
-            Live Map Platform
-          </span>
-          <h2 className="text-3xl md:text-4xl font-bold text-secondary-foreground mb-4">
-            Interactive Map with Navigation
-          </h2>
-          <p className="text-muted-foreground max-w-2xl mx-auto">
-            Real-time routing with distance and ETA calculation. Click the route button, 
-            select start and end points, and get instant navigation.
-          </p>
-        </motion.div>
-
-        {/* Map Container */}
-        <motion.div
-          ref={mapContainerWrapper}
-          initial={{ opacity: 0, scale: 0.95 }}
-          whileInView={{ opacity: 1, scale: 1 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.8 }}
-          className="relative rounded-2xl overflow-hidden shadow-2xl border border-border bg-card max-w-6xl mx-auto"
-        >
-          {/* Map Header Bar */}
-          <div className="flex items-center justify-between px-4 py-3 bg-navy-deep border-b border-white/10">
-            <div className="flex items-center gap-3">
-              <div className="flex gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-destructive" />
-                <div className="w-3 h-3 rounded-full bg-gold" />
-                <div className="w-3 h-3 rounded-full bg-primary" />
-              </div>
-              <span className="text-white/80 text-sm font-medium">NPMI Navigator v2.0</span>
+      
+      {/* Map Container */}
+      <div
+        ref={mapContainerWrapper}
+        className="relative h-full w-full bg-card"
+      >
+        {/* Map Header Bar */}
+        <div className="flex items-center justify-between px-4 py-3 bg-navy-deep border-b border-white/10 relative z-50">
+          <div className="flex items-center gap-3">
+            <div className="flex gap-1.5">
+              <div className="w-3 h-3 rounded-full bg-destructive" />
+              <div className="w-3 h-3 rounded-full bg-gold" />
+              <div className="w-3 h-3 rounded-full bg-primary" />
             </div>
-            <div className="flex items-center gap-4">
-              {isRoutingMode && (
-                <span className="text-xs text-primary bg-primary/20 px-2 py-1 rounded-full">
-                  Routing Mode
-                </span>
-              )}
-              <span className="text-xs text-white/50 hidden sm:block">
-                Zoom: {zoom.toFixed(1)}x
-              </span>
-              <Crosshair className="w-4 h-4 text-white/50" />
-            </div>
+            <span className="text-white/80 text-sm font-medium">NPMI Navigator v2.0</span>
           </div>
+          <div className="flex items-center gap-4">
+            {isRoutingMode && (
+              <span className="text-xs text-primary bg-primary/20 px-2 py-1 rounded-full">
+                Routing Mode
+              </span>
+            )}
+            <span className="text-xs text-white/50 hidden sm:block">
+              Zoom: {zoom.toFixed(1)}x
+            </span>
+            <Crosshair className="w-4 h-4 text-white/50" />
+          </div>
+        </div>
 
           {/* Map Content */}
           <div className="relative h-[400px] sm:h-[500px] md:h-[600px]">
@@ -1045,12 +1021,13 @@ const MapViewer = () => {
           </div>
 
           {/* Map Footer */}
-          <div className="px-4 py-2 bg-muted/50 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+          <div className="px-4 py-2 bg-muted/50 border-t border-border flex items-center justify-between text-xs text-muted-foreground relative z-50">
             <span>© OpenStreetMap contributors | CARTO Basemaps | OSRM Routing</span>
             <span>Powered by MapLibre GL JS</span>
           </div>
-        </motion.div>
+        </div>
 
+<<<<<<< HEAD
         {/* Instructions - Responsive */}
         <motion.div
           initial={{ opacity: 0 }}

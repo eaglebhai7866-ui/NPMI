@@ -1,73 +1,67 @@
-# Welcome to your Lovable project
+# Map Viewer Application
 
-## Project info
+A full-screen interactive map application built with React, TypeScript, and MapLibre GL JS.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Features
 
-## How can I edit this code?
+- **Interactive Map**: Full-screen map with zoom, pan, and rotation controls
+- **Routing & Navigation**: Real-time route calculation with turn-by-turn directions
+- **Search**: Location search with autocomplete
+- **Multiple Map Styles**: Switch between different map themes (Streets, Satellite, Terrain, etc.)
+- **Traffic Layer**: Real-time traffic information overlay
+- **Points of Interest (POI)**: Display various POI categories
+- **Measurement Tools**: Distance and area measurement
+- **Elevation Profile**: View elevation changes along routes
+- **Weather Overlay**: Weather information along routes
+- **Geolocation**: Find your current location
+- **Fullscreen Mode**: Immersive map experience
 
-There are several ways of editing your application.
+## Tech Stack
 
-**Use Lovable**
+- **React 18** with TypeScript
+- **MapLibre GL JS** for map rendering
+- **Tailwind CSS** for styling
+- **Radix UI** for accessible components
+- **Sonner** for toast notifications
+- **Vite** for fast development and building
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## Getting Started
 
-Changes made via Lovable will be committed automatically to this repo.
+1. **Install dependencies**:
+   ```bash
+   npm install
+   ```
 
-**Use your preferred IDE**
+2. **Start development server**:
+   ```bash
+   npm run dev
+   ```
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+3. **Build for production**:
+   ```bash
+   npm run build
+   ```
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## Map Controls
 
-Follow these steps:
+- **Zoom**: Use mouse wheel or zoom buttons
+- **Pan**: Click and drag to move around
+- **Rotate**: Right-click and drag or use compass control
+- **Search**: Use the search bar to find locations
+- **Route**: Click the route button and select start/end points
+- **Layers**: Toggle different map styles and overlays
+- **POI**: Show/hide points of interest
+- **Measure**: Measure distances and areas
+- **Location**: Find your current position
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+## Map Data Sources
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+- **Base Maps**: OpenStreetMap contributors, CARTO Basemaps
+- **Routing**: OSRM (Open Source Routing Machine)
+- **Elevation**: Open-Meteo API
+- **Weather**: Open-Meteo API
+- **Geocoding**: Nominatim (OpenStreetMap)
 
-# Step 3: Install the necessary dependencies.
-npm i
+## License
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+This project is open source and available under the MIT License.
