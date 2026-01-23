@@ -8,7 +8,27 @@ export const mapStyles: Record<MapStyle, { name: string; url: string }> = {
   },
   satellite: {
     name: "Satellite",
-    url: "https://api.maptiler.com/maps/hybrid/style.json?key=get_your_own_OpIi9ZULNHzrESv6T2vL",
+    url: "data:application/json," + encodeURIComponent(JSON.stringify({
+      "version": 8,
+      "name": "Satellite",
+      "sources": {
+        "satellite": {
+          "type": "raster",
+          "tiles": [
+            "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+          ],
+          "tileSize": 256,
+          "attribution": "© Esri, Maxar, Earthstar Geographics"
+        }
+      },
+      "layers": [
+        {
+          "id": "satellite",
+          "type": "raster",
+          "source": "satellite"
+        }
+      ]
+    })),
   },
   terrain: {
     name: "Terrain",
