@@ -131,10 +131,10 @@ const RoutingPanel = ({
   const handleGoToStep = (index: number, step: NavigationStep) => {
     onGoToStep(index, step);
     
-    // Announce the step if voice is enabled
+    // Always announce the step when clicked if voice is enabled
     if (voiceEnabled) {
       const distance = step.distance ? `${Math.round(step.distance)}m` : undefined;
-      voiceNavigator.announceStep(index, step.maneuver.instruction, distance);
+      voiceNavigator.announceStepOnClick(step.maneuver.instruction, distance);
     }
   };
 

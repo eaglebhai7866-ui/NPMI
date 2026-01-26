@@ -69,17 +69,27 @@ export class VoiceNavigator {
   announceStep(stepIndex: number, instruction: string, distance?: string) {
     if (!this.isEnabled) return;
     
-    // Only announce if this is a new step
-    if (stepIndex !== this.currentStepIndex) {
-      this.currentStepIndex = stepIndex;
-      
-      let announcement = this.cleanInstruction(instruction);
-      if (distance && distance !== '0 min') {
-        announcement = `${announcement}. Distance: ${distance}`;
-      }
-      
-      this.speak(announcement, 'high');
+    // Always announce when step is clicked, update current step index
+    this.currentStepIndex = stepIndex;
+    
+    let announcement = this.cleanInstruction(instruction);
+    if (distance && distance !== '0 min') {
+      announcement = `${announcement}. Distance: ${distance}`;
     }
+    
+    this.speak(announcement, 'high');
+  }
+
+  announceStepOnClick(instruction: string, distance?: string) {
+    if (!this.isEnabled) return;
+    
+    // Always announce when step is manually clicked
+    let announcement = this.cleanInstruction(instruction);
+    if (distance && distance !== '0 min') {
+      announcement = `${announcement}. Distance: ${distance}`;
+    }
+    
+    this.speak(announcement, 'high');
   }
 
   announceCurrentStep(instruction: string, distance?: string) {
