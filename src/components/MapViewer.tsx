@@ -48,6 +48,7 @@ const MapViewer = () => {
   // Refs
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapContainerWrapper = useRef<HTMLDivElement>(null);
+  const searchMarkerRef = useRef<maplibregl.Marker | null>(null);
 
   // Map state
   const [activeStyle, setActiveStyle] = useState<MapStyle>("streets");
@@ -83,7 +84,7 @@ const MapViewer = () => {
         const currentStep = routeInfo.steps[currentStepIndex];
         if (currentStep) {
           setTimeout(() => {
-            voiceNavigator.announceCurrentStep(currentStep.maneuver.instruction);
+            voiceNavigator.announceCurrentStep(currentStep.instruction);
           }, 1500); // Wait for "enabled" announcement to finish
         }
       }
@@ -124,6 +125,7 @@ const MapViewer = () => {
     startPoint,
     endPoint,
     routeInfo,
+    routeError,
     isCalculatingRoute,
     selectingPoint,
     alternatives,
@@ -158,6 +160,18 @@ const MapViewer = () => {
   useEffect(() => {
     updatePOIMarkers();
   }, [pois, updatePOIMarkers]);
+
+  // Show error toast when route calculation fails
+  useEffect(() => {
+    if (routeError) {
+      // Defer toast to avoid "Cannot update component during render" warning
+      setTimeout(() => {
+        toast.error("Route calculation failed", {
+          description: routeError,
+        });
+      }, 0);
+    }
+  }, [routeError]);
 
   // Add traffic layer when toggled
   useEffect(() => {
@@ -344,6 +358,11 @@ const MapViewer = () => {
       clearRoute();
       setSelectingPoint(null);
     } else {
+      // Remove search marker when entering routing mode
+      if (searchMarkerRef.current) {
+        searchMarkerRef.current.remove();
+        searchMarkerRef.current = null;
+      }
       setIsRoutingMode(true);
       setSelectingPoint("start");
     }
@@ -377,10 +396,46 @@ const MapViewer = () => {
         setSelectingPoint(null);
       }
     } else {
+      // Remove existing search marker if any
+      if (searchMarkerRef.current) {
+        searchMarkerRef.current.remove();
+      }
+
+      // Create a custom marker element
+      const el = document.createElement('div');
+      el.innerHTML = `
+        <div class="relative">
+          <div class="absolute -top-10 left-1/2 -translate-x-1/2 bg-primary text-white px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap shadow-lg">
+            ${result.display_name.split(',')[0]}
+            <div class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-primary rotate-45"></div>
+          </div>
+          <div class="w-10 h-10 bg-primary rounded-full flex items-center justify-center shadow-lg border-4 border-white animate-bounce">
+            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+            </svg>
+          </div>
+        </div>
+      `;
+
+      // Add marker to map
+      searchMarkerRef.current = new maplibregl.Marker({ 
+        element: el, 
+        anchor: "bottom" 
+      })
+        .setLngLat([lng, lat])
+        .addTo(map);
+
+      // Fly to location
       map.flyTo({
         center: [lng, lat],
         zoom: 14,
         duration: 1500,
+      });
+
+      // Show toast notification
+      toast.success("Location found!", {
+        description: result.display_name.split(',').slice(0, 2).join(', '),
       });
     }
   };
@@ -406,7 +461,6 @@ const MapViewer = () => {
       
       try {
         const coordinates = routeInfo.geometry.coordinates as [number, number][];
-        console.log("Route coordinates:", coordinates.length);
         
         // Limit to maximum 50 points to avoid API limits
         const maxPoints = 50;
@@ -415,7 +469,6 @@ const MapViewer = () => {
         
         // Ensure we don't exceed API limits (typically 100 points max)
         const limitedCoords = sampledCoords.slice(0, maxPoints);
-        console.log("Limited coordinates:", limitedCoords.length);
         
         // Validate coordinates are within reasonable bounds
         const validCoords = limitedCoords.filter(coord => {
@@ -607,52 +660,109 @@ const MapViewer = () => {
           i === numPoints - 1 ? coordinates[coordinates.length - 1] : coordinates[i * step]
         );
 
-        const weatherPromises = samplePoints.map(async (coord, index) => {
+        // Process weather requests sequentially but with optimizations
+        const weatherData = [];
+        for (let index = 0; index < samplePoints.length; index++) {
+          const coord = samplePoints[index];
           const [lng, lat] = coord;
           
-          const response = await fetch(
-            `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m,visibility,pressure_msl&hourly=temperature_2m,weather_code,precipitation_probability&timezone=auto&forecast_days=1`
-          );
-          
-          const data = await response.json();
-          
-          let locationName = `Point ${index + 1}`;
           try {
-            const geoResponse = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10`
-            );
-            const geoData = await geoResponse.json();
-            locationName = geoData.address?.city || geoData.address?.town || 
-                          geoData.address?.village || geoData.address?.county || 
-                          `Point ${index + 1}`;
-          } catch {
-            // Keep default name
+            // Reduced delay between requests
+            if (index > 0) {
+              await new Promise(resolve => setTimeout(resolve, 200)); // Reduced from 500ms to 200ms
+            }
+            
+            // Fetch weather and geocoding in parallel for each point
+            const [weatherResponse, locationName] = await Promise.all([
+              // Weather API call
+              fetch(
+                `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m,visibility,pressure_msl&hourly=temperature_2m,weather_code,precipitation_probability&timezone=auto&forecast_days=1`,
+                { 
+                  signal: AbortSignal.timeout(10000), // 10 second timeout
+                  headers: {
+                    'Accept': 'application/json'
+                  }
+                }
+              ),
+              // Geocoding call with shorter timeout
+              (async () => {
+                try {
+                  const controller = new AbortController();
+                  const timeoutId = setTimeout(() => controller.abort(), 2000); // Reduced from 5s to 2s
+                  
+                  const geoResponse = await fetch(
+                    `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10`,
+                    { 
+                      signal: controller.signal,
+                      headers: {
+                        'User-Agent': 'MapApp/1.0'
+                      }
+                    }
+                  );
+                  
+                  clearTimeout(timeoutId);
+                  
+                  if (geoResponse.ok) {
+                    const geoData = await geoResponse.json();
+                    return geoData.address?.city || geoData.address?.town || 
+                           geoData.address?.village || geoData.address?.county || 
+                           `Point ${index + 1}`;
+                  }
+                } catch {
+                  // Silently fail and use default name
+                }
+                return `Point ${index + 1}`;
+              })()
+            ]);
+            
+            if (!weatherResponse.ok) {
+              throw new Error(`Weather API error: ${weatherResponse.status}`);
+            }
+            
+            const data = await weatherResponse.json();
+
+            weatherData.push({
+              location: index === 0 ? `Start: ${locationName}` : 
+                       index === numPoints - 1 ? `End: ${locationName}` : 
+                       locationName,
+              coordinates: coord,
+              current: {
+                temperature: data.current?.temperature_2m || 0,
+                weatherCode: data.current?.weather_code || 0,
+                windSpeed: data.current?.wind_speed_10m || 0,
+                humidity: data.current?.relative_humidity_2m || 0,
+                visibility: data.current?.visibility || 10000,
+                pressure: data.current?.pressure_msl || 1013,
+              },
+              hourly: (data.hourly?.time || []).map((time: string, i: number) => ({
+                time,
+                temperature: data.hourly?.temperature_2m?.[i] || 0,
+                weatherCode: data.hourly?.weather_code?.[i] || 0,
+                precipitationProbability: data.hourly?.precipitation_probability?.[i] || 0,
+              })),
+            });
+          } catch (pointError) {
+            console.error(`Error fetching weather for point ${index + 1}:`, pointError);
+            // Add fallback data for failed points
+            weatherData.push({
+              location: index === 0 ? `Start: Point ${index + 1}` : 
+                       index === numPoints - 1 ? `End: Point ${index + 1}` : 
+                       `Point ${index + 1}`,
+              coordinates: coord,
+              current: {
+                temperature: 20, // Default temperature
+                weatherCode: 1, // Clear sky
+                windSpeed: 0,
+                humidity: 50,
+                visibility: 10000,
+                pressure: 1013,
+              },
+              hourly: [],
+            });
           }
+        }
 
-          return {
-            location: index === 0 ? `Start: ${locationName}` : 
-                     index === numPoints - 1 ? `End: ${locationName}` : 
-                     locationName,
-            coordinates: coord,
-            current: {
-              temperature: data.current?.temperature_2m || 0,
-              weatherCode: data.current?.weather_code || 0,
-              windSpeed: data.current?.wind_speed_10m || 0,
-              humidity: data.current?.relative_humidity_2m || 0,
-              visibility: data.current?.visibility || 10000,
-              pressure: data.current?.pressure_msl || 1013,
-            },
-            hourly: (data.hourly?.time || []).map((time: string, i: number) => ({
-              time,
-              temperature: data.hourly?.temperature_2m?.[i] || 0,
-              weatherCode: data.hourly?.weather_code?.[i] || 0,
-              precipitationProbability: data.hourly?.precipitation_probability?.[i] || 0,
-            })),
-          };
-        });
-
-        const results = await Promise.all(weatherPromises);
-        setWeatherData(results);
+        setWeatherData(weatherData);
         setSelectedWeatherIndex(0);
         toast.success("Weather data loaded!");
       } catch (error) {
@@ -1054,54 +1164,53 @@ const MapViewer = () => {
             <span>© OpenStreetMap contributors | CARTO Basemaps | OSRM Routing</span>
             <span>Powered by MapLibre GL JS</span>
           </div>
-        </div>
-
-        {/* Instructions - Responsive */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-          transition={{ delay: 0.3 }}
-          className="mt-8 text-center"
-        >
-          <div className="inline-flex flex-wrap items-center justify-center gap-2 sm:gap-3 px-4 sm:px-6 py-3 rounded-xl bg-card border border-border">
-            <div className="flex items-center gap-1 sm:gap-2">
-              <Search className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
-              <span className="text-xs sm:text-sm text-muted-foreground">
-                <strong className="text-foreground">Search</strong>
-              </span>
-            </div>
-            <span className="text-muted-foreground hidden sm:inline">•</span>
-            <div className="flex items-center gap-1 sm:gap-2">
-              <Route className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
-              <span className="text-xs sm:text-sm text-muted-foreground">
-                <strong className="text-foreground">Route</strong>
-              </span>
-            </div>
-            <span className="text-muted-foreground hidden sm:inline">•</span>
-            <div className="flex items-center gap-1 sm:gap-2">
-              <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-500" />
-              <span className="text-xs sm:text-sm text-muted-foreground">
-                <strong className="text-foreground">Elevation</strong>
-              </span>
-            </div>
-            <span className="text-muted-foreground hidden sm:inline">•</span>
-            <div className="flex items-center gap-1 sm:gap-2">
-              <CloudSun className="w-4 h-4 sm:w-5 sm:h-5 text-sky-500" />
-              <span className="text-xs sm:text-sm text-muted-foreground">
-                <strong className="text-foreground">Weather</strong>
-              </span>
-            </div>
-            <span className="text-muted-foreground hidden sm:inline">•</span>
-            <div className="flex items-center gap-1 sm:gap-2">
-              <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-purple-500" />
-              <span className="text-xs sm:text-sm text-muted-foreground">
-                <strong className="text-foreground">POIs</strong>
-              </span>
-            </div>
-          </div>
-        </motion.div>
       </div>
+
+      {/* Instructions - Responsive */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        viewport={{ once: true }}
+        transition={{ delay: 0.3 }}
+        className="mt-8 text-center"
+      >
+        <div className="inline-flex flex-wrap items-center justify-center gap-2 sm:gap-3 px-4 sm:px-6 py-3 rounded-xl bg-card border border-border">
+          <div className="flex items-center gap-1 sm:gap-2">
+            <Search className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+            <span className="text-xs sm:text-sm text-muted-foreground">
+              <strong className="text-foreground">Search</strong>
+            </span>
+          </div>
+          <span className="text-muted-foreground hidden sm:inline">•</span>
+          <div className="flex items-center gap-1 sm:gap-2">
+            <Route className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+            <span className="text-xs sm:text-sm text-muted-foreground">
+              <strong className="text-foreground">Route</strong>
+            </span>
+          </div>
+          <span className="text-muted-foreground hidden sm:inline">•</span>
+          <div className="flex items-center gap-1 sm:gap-2">
+            <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-500" />
+            <span className="text-xs sm:text-sm text-muted-foreground">
+              <strong className="text-foreground">Elevation</strong>
+            </span>
+          </div>
+          <span className="text-muted-foreground hidden sm:inline">•</span>
+          <div className="flex items-center gap-1 sm:gap-2">
+            <CloudSun className="w-4 h-4 sm:w-5 sm:h-5 text-sky-500" />
+            <span className="text-xs sm:text-sm text-muted-foreground">
+              <strong className="text-foreground">Weather</strong>
+            </span>
+          </div>
+          <span className="text-muted-foreground hidden sm:inline">•</span>
+          <div className="flex items-center gap-1 sm:gap-2">
+            <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-purple-500" />
+            <span className="text-xs sm:text-sm text-muted-foreground">
+              <strong className="text-foreground">POIs</strong>
+            </span>
+          </div>
+        </div>
+      </motion.div>
 
       {/* Custom styles */}
       <style>{`
@@ -1180,7 +1289,7 @@ const MapViewer = () => {
           }
         }
       `}</style>
-    </section>
+    </div>
   );
 };
 

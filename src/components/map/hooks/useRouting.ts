@@ -14,9 +14,12 @@ export const useRouting = ({ map, travelMode, onRouteCalculated }: UseRoutingPro
   const [endPoint, setEndPoint] = useState<RoutePoint | null>(null);
   const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null);
   const [selectingPoint, setSelectingPoint] = useState<"start" | "end" | null>(null);
+  const [routeError, setRouteError] = useState<string | null>(null);
   
   const startMarker = useRef<maplibregl.Marker | null>(null);
   const endMarker = useRef<maplibregl.Marker | null>(null);
+  const isCalculatingRef = useRef(false); // Prevent duplicate calculations
+  const calculationTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Debounce timer
 
   // Use route alternatives hook
   const {
@@ -80,34 +83,85 @@ export const useRouting = ({ map, travelMode, onRouteCalculated }: UseRoutingPro
 
   // Calculate route when both points are set
   useEffect(() => {
+    // Clear any pending calculation
+    if (calculationTimeoutRef.current) {
+      clearTimeout(calculationTimeoutRef.current);
+    }
+
     const calculateRoute = async () => {
       if (!startPoint || !endPoint || !map) return;
-
-      const route = await calculateAlternatives(startPoint, endPoint);
       
-      if (route) {
-        setRouteInfo(route);
-        drawRoute(route.geometry);
-        
-        // Call voice callback if provided
-        if (onRouteCalculated) {
-          onRouteCalculated(route);
-        }
+      // Prevent duplicate calculations
+      if (isCalculatingRef.current) {
+        console.log('Route calculation already in progress, skipping...');
+        return;
+      }
 
-        // Fit map to route
-        const coordinates = route.geometry.coordinates as [number, number][];
-        const bounds = coordinates.reduce(
-          (bounds, coord) => bounds.extend(coord as maplibregl.LngLatLike),
-          new maplibregl.LngLatBounds(coordinates[0], coordinates[0])
-        );
-        map.fitBounds(bounds, { padding: 80, duration: 1000 });
+      isCalculatingRef.current = true;
+      setRouteError(null); // Clear previous errors
+
+      try {
+        const route = await calculateAlternatives(startPoint, endPoint);
+        
+        if (route) {
+          setRouteInfo(route);
+          drawRoute(route.geometry);
+          
+          // Update marker positions to match actual route start/end (snapped to roads)
+          const coordinates = route.geometry.coordinates as [number, number][];
+          if (coordinates.length > 0) {
+            const actualStart = coordinates[0];
+            const actualEnd = coordinates[coordinates.length - 1];
+            
+            // Update start marker to actual route start
+            if (startMarker.current) {
+              startMarker.current.setLngLat(actualStart as maplibregl.LngLatLike);
+            }
+            
+            // Update end marker to actual route end
+            if (endMarker.current) {
+              endMarker.current.setLngLat(actualEnd as maplibregl.LngLatLike);
+            }
+          }
+          
+          // Call voice callback if provided
+          if (onRouteCalculated) {
+            onRouteCalculated(route);
+          }
+
+          // Fit map to route
+          const bounds = coordinates.reduce(
+            (bounds, coord) => bounds.extend(coord as maplibregl.LngLatLike),
+            new maplibregl.LngLatBounds(coordinates[0], coordinates[0])
+          );
+          map.fitBounds(bounds, { padding: 80, duration: 1000 });
+        } else {
+          setRouteError('No route found between these points');
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to calculate route';
+        setRouteError(errorMessage);
+        console.error('Route calculation failed:', error);
+      } finally {
+        isCalculatingRef.current = false;
       }
     };
 
     if (startPoint && endPoint && map) {
-      calculateRoute();
+      // Debounce route calculation by 300ms
+      calculationTimeoutRef.current = setTimeout(() => {
+        calculateRoute();
+      }, 300);
     }
-  }, [startPoint, endPoint, map, calculateAlternatives, drawRoute]);
+
+    // Cleanup timeout on unmount or dependency change
+    return () => {
+      if (calculationTimeoutRef.current) {
+        clearTimeout(calculationTimeoutRef.current);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startPoint, endPoint, map, travelMode]); // Only depend on the actual data, not the functions
 
   // Handle alternative route selection
   const handleSelectAlternative = useCallback((index: number) => {
@@ -116,8 +170,24 @@ export const useRouting = ({ map, travelMode, onRouteCalculated }: UseRoutingPro
       setRouteInfo(route);
       drawRoute(route.geometry);
 
-      // Fit map to route
+      // Update marker positions to match actual route start/end
       const coordinates = route.geometry.coordinates as [number, number][];
+      if (coordinates.length > 0) {
+        const actualStart = coordinates[0];
+        const actualEnd = coordinates[coordinates.length - 1];
+        
+        // Update start marker to actual route start
+        if (startMarker.current) {
+          startMarker.current.setLngLat(actualStart as maplibregl.LngLatLike);
+        }
+        
+        // Update end marker to actual route end
+        if (endMarker.current) {
+          endMarker.current.setLngLat(actualEnd as maplibregl.LngLatLike);
+        }
+      }
+
+      // Fit map to route
       const bounds = coordinates.reduce(
         (bounds, coord) => bounds.extend(coord as maplibregl.LngLatLike),
         new maplibregl.LngLatBounds(coordinates[0], coordinates[0])
@@ -194,6 +264,7 @@ export const useRouting = ({ map, travelMode, onRouteCalculated }: UseRoutingPro
     setStartPoint(null);
     setEndPoint(null);
     setRouteInfo(null);
+    setRouteError(null);
     setSelectingPoint("start");
   }, [map]);
 
@@ -201,6 +272,7 @@ export const useRouting = ({ map, travelMode, onRouteCalculated }: UseRoutingPro
     startPoint,
     endPoint,
     routeInfo,
+    routeError,
     isCalculatingRoute,
     selectingPoint,
     alternatives,

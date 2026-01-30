@@ -136,7 +136,7 @@ const MobileRoutingPanel = ({
     // Always announce the step when clicked if voice is enabled
     if (voiceEnabled) {
       const distance = step.distance ? `${Math.round(step.distance)}m` : undefined;
-      voiceNavigator.announceStepOnClick(step.maneuver.instruction, distance);
+      voiceNavigator.announceStepOnClick(step.instruction, distance);
     }
   };
 

@@ -36,6 +36,10 @@ const SearchBar = ({ isRoutingMode, selectingPoint, onSelectResult }: SearchBarP
         },
       });
       
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data: SearchResult[] = await response.json();
       setSearchResults(data);
       setShowSearchResults(true);

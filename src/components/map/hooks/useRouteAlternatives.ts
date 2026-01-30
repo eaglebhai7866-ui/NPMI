@@ -22,7 +22,8 @@ export const useRouteAlternatives = ({ travelMode }: UseRouteAlternativesProps) 
 
   const calculateAlternatives = useCallback(async (
     startPoint: RoutePoint,
-    endPoint: RoutePoint
+    endPoint: RoutePoint,
+    retryCount = 0
   ) => {
     setIsCalculating(true);
     setAlternatives([]);
@@ -31,8 +32,25 @@ export const useRouteAlternatives = ({ travelMode }: UseRouteAlternativesProps) 
       const profile = travelModes[travelMode].profile;
       const url = `https://router.project-osrm.org/route/v1/${profile}/${startPoint.lngLat[0]},${startPoint.lngLat[1]};${endPoint.lngLat[0]},${endPoint.lngLat[1]}?alternatives=2&overview=full&geometries=geojson&steps=true`;
       
-      console.log('Fetching route alternatives from:', url);
-      const response = await fetch(url);
+      console.log(`Fetching route alternatives (attempt ${retryCount + 1}):`, url);
+      
+      // Add timeout to prevent hanging - increased to 30 seconds
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json',
+        }
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       console.log('OSRM Response:', data);
 
@@ -95,10 +113,35 @@ export const useRouteAlternatives = ({ travelMode }: UseRouteAlternativesProps) 
         setSelectedAlternative(0);
         return processedRoutes[0];
       } else {
+        const errorMsg = data.message || 'No routes found';
         console.error('OSRM returned no routes or error:', data);
+        throw new Error(errorMsg);
       }
     } catch (error) {
-      console.error("Error calculating alternatives:", error);
+      console.error(`Error calculating alternatives (attempt ${retryCount + 1}):`, error);
+      
+      // Retry logic - retry up to 2 times on timeout or network errors
+      if (retryCount < 2) {
+        if (error instanceof Error) {
+          if (error.name === 'AbortError' || error.message.includes('Failed to fetch')) {
+            console.log(`Retrying route calculation (${retryCount + 1}/2)...`);
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+            return calculateAlternatives(startPoint, endPoint, retryCount + 1);
+          }
+        }
+      }
+      
+      // Provide more specific error messages
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          throw new Error('Route calculation timed out after multiple attempts. The routing service may be slow or unavailable.');
+        } else if (error.message.includes('Failed to fetch')) {
+          throw new Error('Unable to connect to routing service. Please check your internet connection.');
+        } else {
+          throw error;
+        }
+      }
+      throw new Error('Failed to calculate route. Please try again.');
     } finally {
       setIsCalculating(false);
     }

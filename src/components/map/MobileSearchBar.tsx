@@ -37,6 +37,11 @@ const MobileSearchBar = ({
           searchQuery
         )}&limit=8&countrycodes=pk&addressdetails=1`
       );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       setResults(data);
       setShowResults(true);

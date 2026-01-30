@@ -66,8 +66,8 @@ export class VoiceNavigator {
     this.speak(announcement, 'high');
   }
 
-  announceStep(stepIndex: number, instruction: string, distance?: string) {
-    if (!this.isEnabled) return;
+  announceStep(stepIndex: number, instruction: string | undefined, distance?: string) {
+    if (!this.isEnabled || !instruction) return;
     
     // Always announce when step is clicked, update current step index
     this.currentStepIndex = stepIndex;
@@ -80,8 +80,8 @@ export class VoiceNavigator {
     this.speak(announcement, 'high');
   }
 
-  announceStepOnClick(instruction: string, distance?: string) {
-    if (!this.isEnabled) return;
+  announceStepOnClick(instruction: string | undefined, distance?: string) {
+    if (!this.isEnabled || !instruction) return;
     
     // Always announce when step is manually clicked
     let announcement = this.cleanInstruction(instruction);
@@ -92,7 +92,9 @@ export class VoiceNavigator {
     this.speak(announcement, 'high');
   }
 
-  announceCurrentStep(instruction: string, distance?: string) {
+  announceCurrentStep(instruction: string | undefined, distance?: string) {
+    if (!instruction) return;
+    
     let announcement = `Current step: ${this.cleanInstruction(instruction)}`;
     if (distance && distance !== '0 min') {
       announcement += `. Distance: ${distance}`;
@@ -100,7 +102,9 @@ export class VoiceNavigator {
     this.speak(announcement, 'high');
   }
 
-  announceNextStep(instruction: string, distance?: string) {
+  announceNextStep(instruction: string | undefined, distance?: string) {
+    if (!instruction) return;
+    
     let announcement = `Next: ${this.cleanInstruction(instruction)}`;
     if (distance && distance !== '0 min') {
       announcement += `. Distance: ${distance}`;
@@ -108,7 +112,12 @@ export class VoiceNavigator {
     this.speak(announcement, 'normal');
   }
 
-  private cleanInstruction(instruction: string): string {
+  private cleanInstruction(instruction: string | undefined): string {
+    // Handle undefined or null instruction
+    if (!instruction) {
+      return 'Continue';
+    }
+    
     // Clean up common instruction patterns for better speech
     return instruction
       .replace(/Continue onto/gi, 'Continue on')
