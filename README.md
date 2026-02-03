@@ -48,6 +48,15 @@ A full-screen interactive map application built with React, TypeScript, and MapL
 
 For faster, offline routing with Pakistan OSM data:
 
+#### Quick Start (All Services)
+```bash
+startup.bat
+```
+
+This starts GraphHopper, Backend API, and Frontend automatically!
+
+#### Manual Setup
+
 1. **Start all services**:
    ```bash
    start-services.bat

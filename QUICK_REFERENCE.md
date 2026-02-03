@@ -2,10 +2,16 @@
 
 ## Starting the Application
 
-### Option 1: Start All Services at Once
+### Option 1: Start All Services at Once (Recommended)
 ```bash
-start-services.bat
+startup.bat
 ```
+
+This will:
+- Start GraphHopper server (port 8989)
+- Start Backend API (port 3001)
+- Start Frontend dev server (port 5173)
+- Open browser automatically
 
 ### Option 2: Start Services Individually
 
@@ -185,9 +191,11 @@ curl http://localhost:3001/api/health
 
 ### Restart Services
 ```bash
-# Stop all services (Ctrl+C in each terminal)
-# Then run:
-start-services.bat
+# Stop all services
+shutdown.bat
+
+# Start all services
+startup.bat
 ```
 
 ## Browser DevTools
