@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import routingRoutes from './routes/routing';
 import { errorHandler } from './middleware/errorHandler';
+import logger from './utils/logger';
 
 // Load environment variables
 dotenv.config();
@@ -14,9 +15,21 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Request logging
+// Request logging middleware
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  const start = Date.now();
+  
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    logger.info('HTTP Request', {
+      method: req.method,
+      path: req.path,
+      status: res.statusCode,
+      duration: `${duration}ms`,
+      ip: req.ip,
+    });
+  });
+  
   next();
 });
 
@@ -24,7 +37,7 @@ app.use((req, res, next) => {
 app.use('/api', routingRoutes);
 
 // Root endpoint
-app.get('/', (req, res) => {
+app.get('/', (_req, res) => {
   res.json({
     name: 'NPMI Routing Backend',
     version: '1.0.0',
@@ -32,6 +45,7 @@ app.get('/', (req, res) => {
     endpoints: {
       health: 'GET /api/health',
       route: 'POST /api/route',
+      clearCache: 'POST /api/cache/clear',
     },
   });
 });
@@ -41,15 +55,16 @@ app.use(errorHandler);
 
 // Start server
 app.listen(PORT, () => {
-  console.log('========================================');
-  console.log('🚀 NPMI Routing Backend');
-  console.log('========================================');
-  console.log(`✅ Server running on http://localhost:${PORT}`);
-  console.log(`📍 GraphHopper: ${process.env.GRAPHHOPPER_URL || 'http://localhost:8989'}`);
-  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log('========================================');
-  console.log('Endpoints:');
-  console.log(`  GET  http://localhost:${PORT}/api/health`);
-  console.log(`  POST http://localhost:${PORT}/api/route`);
-  console.log('========================================');
+  logger.info('========================================');
+  logger.info('🚀 NPMI Routing Backend');
+  logger.info('========================================');
+  logger.info(`✅ Server running on http://localhost:${PORT}`);
+  logger.info(`📍 GraphHopper: ${process.env.GRAPHHOPPER_URL || 'http://localhost:8989'}`);
+  logger.info(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  logger.info('========================================');
+  logger.info('Endpoints:');
+  logger.info(`  GET  http://localhost:${PORT}/api/health`);
+  logger.info(`  POST http://localhost:${PORT}/api/route`);
+  logger.info(`  POST http://localhost:${PORT}/api/cache/clear`);
+  logger.info('========================================');
 });

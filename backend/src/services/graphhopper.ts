@@ -6,6 +6,7 @@ import type {
   GraphHopperResponse,
   GraphHopperInstruction,
 } from '../types/routing';
+import logger from '../utils/logger';
 
 class GraphHopperService {
   private client: AxiosInstance;
@@ -28,6 +29,16 @@ class GraphHopperService {
   async calculateRoute(request: RouteRequest): Promise<RouteInfo[]> {
     const profile = this.getProfile(request.mode);
     const maxPaths = request.alternatives ? 3 : 1;
+
+    logger.info('Calculating route', {
+      start: request.start,
+      end: request.end,
+      mode: request.mode,
+      profile,
+      alternatives: request.alternatives,
+    });
+
+    const startTime = Date.now();
 
     try {
       const params: any = {
@@ -63,8 +74,24 @@ class GraphHopperService {
         },
       });
 
-      return this.transformResponse(response.data);
+      const duration = Date.now() - startTime;
+      const routes = this.transformResponse(response.data);
+
+      logger.info('Route calculated successfully', {
+        routeCount: routes.length,
+        duration: `${duration}ms`,
+        distances: routes.map(r => `${(r.distance / 1000).toFixed(2)}km`),
+      });
+
+      return routes;
     } catch (error) {
+      const duration = Date.now() - startTime;
+      logger.error('Route calculation failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        duration: `${duration}ms`,
+        request,
+      });
+
       if (axios.isAxiosError(error)) {
         throw new Error(
           `GraphHopper error: ${error.response?.data?.message || error.message}`

@@ -124,19 +124,19 @@
 - [x] 15.4 Add to package.json scripts (not needed - batch files)
 - [x] 15.5 Test scripts on clean environment
 
-### [ ] 16. Optimize Performance
-- [ ] 16.1 Enable GraphHopper Contraction Hierarchies
-- [ ] 16.2 Tune JVM memory settings
-- [ ] 16.3 Add response caching in backend
-- [ ] 16.4 Optimize frontend API calls
-- [ ] 16.5 Measure and document response times
+### [x] 16. Optimize Performance
+- [x] 16.1 Enable GraphHopper Contraction Hierarchies (Disabled for alternatives)
+- [x] 16.2 Tune JVM memory settings (Using defaults)
+- [x] 16.3 Add response caching in backend
+- [x] 16.4 Optimize frontend API calls (Already optimized)
+- [x] 16.5 Measure and document response times
 
-### [ ] 17. Add Monitoring & Logging
-- [ ] 17.1 Add Winston logger to backend
-- [ ] 17.2 Log all route requests
-- [ ] 17.3 Log errors with stack traces
-- [ ] 17.4 Add performance metrics logging
-- [ ] 17.5 Create log rotation policy
+### [x] 17. Add Monitoring & Logging
+- [x] 17.1 Add Winston logger to backend
+- [x] 17.2 Log all route requests
+- [x] 17.3 Log errors with stack traces
+- [x] 17.4 Add performance metrics logging
+- [x] 17.5 Create log rotation policy
 
 ## Phase 5: Testing & Validation
 
