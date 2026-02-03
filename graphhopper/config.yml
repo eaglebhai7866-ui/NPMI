@@ -1,0 +1,35 @@
+graphhopper:
+  datareader.file: data/pakistan-260201.osm.pbf
+  graph.location: ./graph-cache
+
+  import.osm.ignored_highways: ""
+
+  profiles:
+    - name: car
+      vehicle: car
+      weighting: custom
+      custom_model_files: [car.json]
+      ch.disable: true
+      lm.disable: true
+
+    - name: bike
+      vehicle: bike
+      weighting: custom
+      custom_model_files: [bike.json]
+      ch.disable: true
+      lm.disable: true
+
+    - name: foot
+      vehicle: foot
+      weighting: custom
+      custom_model_files: [foot.json]
+      ch.disable: true
+      lm.disable: true
+
+server:
+  application_connectors:
+    - type: http
+      port: 8989
+  admin_connectors:
+    - type: http
+      port: 8990

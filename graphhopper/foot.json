@@ -1,0 +1,9 @@
+{
+  "priority": [
+    { "if": "road_class == FOOTWAY || road_class == PATH", "multiply_by": 1.2 },
+    { "if": "road_class == MOTORWAY", "multiply_by": 0.0 }
+  ],
+  "speed": [
+    { "if": "true", "limit_to": 5 }
+  ]
+}

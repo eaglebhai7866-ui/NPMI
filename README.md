@@ -27,6 +27,8 @@ A full-screen interactive map application built with React, TypeScript, and MapL
 
 ## Getting Started
 
+### Frontend Only (OSRM Routing)
+
 1. **Install dependencies**:
    ```bash
    npm install
@@ -41,6 +43,31 @@ A full-screen interactive map application built with React, TypeScript, and MapL
    ```bash
    npm run build
    ```
+
+### With Local Routing (GraphHopper)
+
+For faster, offline routing with Pakistan OSM data:
+
+1. **Start all services**:
+   ```bash
+   start-services.bat
+   ```
+
+   Or manually:
+   ```bash
+   # Terminal 1: Start GraphHopper
+   cd graphhopper
+   start-graphhopper.bat
+
+   # Terminal 2: Start Backend API
+   cd backend
+   npm run dev
+
+   # Terminal 3: Start Frontend
+   npm run dev
+   ```
+
+2. **See detailed guide**: [LOCAL_ROUTING_GUIDE.md](LOCAL_ROUTING_GUIDE.md)
 
 ## Map Controls
 
@@ -57,10 +84,33 @@ A full-screen interactive map application built with React, TypeScript, and MapL
 ## Map Data Sources
 
 - **Base Maps**: OpenStreetMap contributors, CARTO Basemaps
-- **Routing**: OSRM (Open Source Routing Machine)
+- **Routing**: 
+  - Local: GraphHopper with Pakistan OSM data (when available)
+  - Fallback: OSRM (Open Source Routing Machine)
 - **Elevation**: Open-Meteo API
 - **Weather**: Open-Meteo API
 - **Geocoding**: Nominatim (OpenStreetMap)
+
+## Project Structure
+
+```
+pakistan-secure-hub/
+├── src/                          # Frontend source code
+│   ├── components/               # React components
+│   │   └── map/                  # Map-related components
+│   │       └── hooks/            # Custom hooks (routing, POI, etc.)
+│   └── lib/                      # Utilities
+│       └── routing-api.ts        # Local routing API client
+├── backend/                      # Node.js routing backend
+│   └── src/
+│       ├── routes/               # API endpoints
+│       └── services/             # GraphHopper service
+├── graphhopper/                  # GraphHopper routing engine
+│   ├── config.yml                # GraphHopper configuration
+│   ├── data/                     # OSM data files
+│   └── start-graphhopper.bat     # Start script
+├── LOCAL_ROUTING_GUIDE.md        # Local routing setup guide
+└── start-services.bat            # Start all services
 
 ## License
 

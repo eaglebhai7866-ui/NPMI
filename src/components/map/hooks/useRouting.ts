@@ -30,7 +30,121 @@ export const useRouting = ({ map, travelMode, onRouteCalculated }: UseRoutingPro
     selectAlternative,
   } = useRouteAlternatives({ travelMode });
 
-  // Draw route on map
+  // Handle alternative route selection
+  const handleSelectAlternative = useCallback((index: number) => {
+    const route = selectAlternative(index);
+    if (route && map) {
+      setRouteInfo(route);
+
+      // Update marker positions to match actual route start/end
+      const coordinates = route.geometry.coordinates as [number, number][];
+      if (coordinates.length > 0) {
+        const actualStart = coordinates[0];
+        const actualEnd = coordinates[coordinates.length - 1];
+        
+        // Update start marker to actual route start
+        if (startMarker.current) {
+          startMarker.current.setLngLat(actualStart as maplibregl.LngLatLike);
+        }
+        
+        // Update end marker to actual route end
+        if (endMarker.current) {
+          endMarker.current.setLngLat(actualEnd as maplibregl.LngLatLike);
+        }
+      }
+
+      // Fit map to route
+      const bounds = coordinates.reduce(
+        (bounds, coord) => bounds.extend(coord as maplibregl.LngLatLike),
+        new maplibregl.LngLatBounds(coordinates[0], coordinates[0])
+      );
+      map.fitBounds(bounds, { padding: 80, duration: 1000 });
+    }
+  }, [selectAlternative, map]);
+
+  // Draw all route alternatives on map (Waze-style)
+  const drawAllRoutes = useCallback((routes: any[], selectedIndex: number) => {
+    if (!map) return;
+
+    // Remove existing routes
+    for (let i = 0; i < 5; i++) {
+      if (map.getLayer(`route-${i}-casing`)) map.removeLayer(`route-${i}-casing`);
+      if (map.getLayer(`route-${i}-line`)) map.removeLayer(`route-${i}-line`);
+      if (map.getSource(`route-${i}`)) map.removeSource(`route-${i}`);
+    }
+
+    // Draw each route with different styling
+    routes.forEach((route, index) => {
+      const isSelected = index === selectedIndex;
+      
+      // Route colors: selected = purple, alternatives = gray
+      const lineColor = isSelected ? "#7c3aed" : "#94a3b8"; // Purple or gray
+      const casingColor = isSelected ? "#5b21b6" : "#64748b"; // Darker purple or gray
+      const lineWidth = isSelected ? 8 : 6;
+      const casingWidth = isSelected ? 12 : 9;
+      const opacity = isSelected ? 1 : 0.6;
+
+      // Add route source
+      map.addSource(`route-${index}`, {
+        type: "geojson",
+        data: {
+          type: "Feature",
+          properties: { index, selected: isSelected },
+          geometry: route.geometry,
+        },
+      });
+
+      // Add casing (outline) layer
+      map.addLayer({
+        id: `route-${index}-casing`,
+        type: "line",
+        source: `route-${index}`,
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+        },
+        paint: {
+          "line-color": casingColor,
+          "line-width": casingWidth,
+          "line-opacity": opacity * 0.8,
+        },
+      });
+
+      // Add main route line
+      map.addLayer({
+        id: `route-${index}-line`,
+        type: "line",
+        source: `route-${index}`,
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+        },
+        paint: {
+          "line-color": lineColor,
+          "line-width": lineWidth,
+          "line-opacity": opacity,
+        },
+      });
+
+      // Add click handler to select route
+      map.on('click', `route-${index}-line`, () => {
+        if (index !== selectedIndex) {
+          handleSelectAlternative(index);
+        }
+      });
+
+      // Change cursor on hover
+      map.on('mouseenter', `route-${index}-line`, () => {
+        map.getCanvas().style.cursor = 'pointer';
+      });
+
+      map.on('mouseleave', `route-${index}-line`, () => {
+        map.getCanvas().style.cursor = '';
+      });
+    });
+  }, [map, handleSelectAlternative]);
+
+  // Legacy single route drawing (for backward compatibility)
   const drawRoute = useCallback((geometry: GeoJSON.LineString) => {
     if (!map) return;
 
@@ -41,7 +155,7 @@ export const useRouting = ({ map, travelMode, onRouteCalculated }: UseRoutingPro
       map.removeSource("route");
     }
 
-    // Add route source and layers
+    // Add route source and layers with Waze-style colors
     map.addSource("route", {
       type: "geojson",
       data: {
@@ -51,6 +165,7 @@ export const useRouting = ({ map, travelMode, onRouteCalculated }: UseRoutingPro
       },
     });
 
+    // Casing (outline)
     map.addLayer({
       id: "route-line-outline",
       type: "line",
@@ -60,12 +175,13 @@ export const useRouting = ({ map, travelMode, onRouteCalculated }: UseRoutingPro
         "line-cap": "round",
       },
       paint: {
-        "line-color": "#1e40af",
-        "line-width": 8,
-        "line-opacity": 0.5,
+        "line-color": "#5b21b6", // Dark purple
+        "line-width": 12,
+        "line-opacity": 0.8,
       },
     });
 
+    // Main line
     map.addLayer({
       id: "route-line",
       type: "line",
@@ -75,8 +191,8 @@ export const useRouting = ({ map, travelMode, onRouteCalculated }: UseRoutingPro
         "line-cap": "round",
       },
       paint: {
-        "line-color": "#3b82f6",
-        "line-width": 5,
+        "line-color": "#7c3aed", // Purple (Waze-style)
+        "line-width": 8,
       },
     });
   }, [map]);
@@ -105,7 +221,13 @@ export const useRouting = ({ map, travelMode, onRouteCalculated }: UseRoutingPro
         
         if (route) {
           setRouteInfo(route);
-          drawRoute(route.geometry);
+          
+          // Draw all alternatives if available, otherwise draw single route
+          if (alternatives.length > 1) {
+            drawAllRoutes(alternatives, selectedAlternative);
+          } else {
+            drawRoute(route.geometry);
+          }
           
           // Update marker positions to match actual route start/end (snapped to roads)
           const coordinates = route.geometry.coordinates as [number, number][];
@@ -163,38 +285,12 @@ export const useRouting = ({ map, travelMode, onRouteCalculated }: UseRoutingPro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startPoint, endPoint, map, travelMode]); // Only depend on the actual data, not the functions
 
-  // Handle alternative route selection
-  const handleSelectAlternative = useCallback((index: number) => {
-    const route = selectAlternative(index);
-    if (route && map) {
-      setRouteInfo(route);
-      drawRoute(route.geometry);
-
-      // Update marker positions to match actual route start/end
-      const coordinates = route.geometry.coordinates as [number, number][];
-      if (coordinates.length > 0) {
-        const actualStart = coordinates[0];
-        const actualEnd = coordinates[coordinates.length - 1];
-        
-        // Update start marker to actual route start
-        if (startMarker.current) {
-          startMarker.current.setLngLat(actualStart as maplibregl.LngLatLike);
-        }
-        
-        // Update end marker to actual route end
-        if (endMarker.current) {
-          endMarker.current.setLngLat(actualEnd as maplibregl.LngLatLike);
-        }
-      }
-
-      // Fit map to route
-      const bounds = coordinates.reduce(
-        (bounds, coord) => bounds.extend(coord as maplibregl.LngLatLike),
-        new maplibregl.LngLatBounds(coordinates[0], coordinates[0])
-      );
-      map.fitBounds(bounds, { padding: 80, duration: 1000 });
+  // Redraw routes when alternatives or selection changes
+  useEffect(() => {
+    if (alternatives.length > 1 && map) {
+      drawAllRoutes(alternatives, selectedAlternative);
     }
-  }, [selectAlternative, map, drawRoute]);
+  }, [alternatives, selectedAlternative, map, drawAllRoutes]);
 
   // Update markers when points change
   useEffect(() => {
@@ -249,10 +345,18 @@ export const useRouting = ({ map, travelMode, onRouteCalculated }: UseRoutingPro
 
   const clearRoute = useCallback(() => {
     if (map) {
+      // Remove all route layers (both single and alternatives)
       if (map.getSource("route")) {
         if (map.getLayer("route-line")) map.removeLayer("route-line");
         if (map.getLayer("route-line-outline")) map.removeLayer("route-line-outline");
         map.removeSource("route");
+      }
+      
+      // Remove alternative routes
+      for (let i = 0; i < 5; i++) {
+        if (map.getLayer(`route-${i}-casing`)) map.removeLayer(`route-${i}-casing`);
+        if (map.getLayer(`route-${i}-line`)) map.removeLayer(`route-${i}-line`);
+        if (map.getSource(`route-${i}`)) map.removeSource(`route-${i}`);
       }
     }
     

@@ -1,4 +1,4 @@
-export type MapStyle = "streets" | "satellite" | "terrain";
+export type MapStyle = "streets" | "satellite" | "terrain" | "osm";
 export type TravelMode = "driving" | "cycling" | "walking";
 export type POICategory = "hospital" | "school" | "fuel" | "restaurant";
 export type MeasureMode = "none" | "distance" | "area";

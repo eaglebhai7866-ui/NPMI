@@ -27,14 +27,25 @@ export const useMapInitialization = ({
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
 
+    // Pakistan bounds: [minLng, minLat, maxLng, maxLat]
+    const pakistanBounds: [number, number, number, number] = [
+      60.872, // West (Balochistan border)
+      23.634, // South (Arabian Sea coast)
+      77.840, // East (Kashmir border)
+      37.097  // North (Gilgit-Baltistan)
+    ];
+
     map.current = new maplibregl.Map({
       container: mapContainer.current,
       style: mapStyles[activeStyle].url,
-      center: [69.3451, 30.3753],
+      center: [69.3451, 30.3753], // Center of Pakistan
       zoom: 5,
       pitch: 0,
       bearing: 0,
       attributionControl: false,
+      maxBounds: pakistanBounds, // Restrict map to Pakistan
+      minZoom: 5, // Prevent zooming out too far
+      maxZoom: 18, // Allow detailed zoom
     });
 
     map.current.addControl(

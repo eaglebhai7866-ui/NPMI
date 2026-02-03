@@ -58,42 +58,42 @@ const RouteAlternatives = ({ routes, selectedIndex, onSelect }: RouteAlternative
   };
 
   return (
-    <div className="space-y-2 p-3">
-      {routes.length > 1 && (
-        <div className="text-xs font-medium text-gray-500 mb-2">
-          {routes.length} route{routes.length !== 1 ? 's' : ''} available
-        </div>
-      )}
-      
+    <div className="space-y-2">
       {routes.map((route, index) => {
         const Icon = getRouteIcon(route.type);
         const isSelected = index === selectedIndex;
-        const colorClass = getRouteColor(route.type);
         
         return (
           <motion.button
             key={index}
             onClick={() => onSelect(index)}
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: index * 0.1 }}
-            className={`w-full p-3 rounded-lg border-2 transition-all text-left ${
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.05, type: "spring", stiffness: 300, damping: 25 }}
+            className={`w-full p-3 rounded-xl transition-all text-left relative overflow-hidden ${
               isSelected
-                ? `${colorClass} shadow-md scale-[1.02]`
-                : "bg-white border-gray-200 hover:border-gray-300 hover:shadow"
+                ? "bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg shadow-purple-200"
+                : "bg-gray-50 hover:bg-gray-100 border border-gray-200 hover:border-gray-300"
             }`}
           >
-            <div className="flex items-start justify-between mb-2">
+            {/* Route indicator line */}
+            <div className={`absolute left-0 top-0 bottom-0 w-1 ${
+              isSelected ? "bg-white" : "bg-purple-400"
+            }`} />
+            
+            <div className="flex items-center justify-between mb-2 ml-2">
               <div className="flex items-center gap-2">
-                <div className={`p-1.5 rounded-lg ${isSelected ? 'bg-white/50' : 'bg-gray-100'}`}>
-                  <Icon className="w-4 h-4" />
+                <div className={`p-1.5 rounded-lg ${
+                  isSelected ? 'bg-white/20' : 'bg-purple-100'
+                }`}>
+                  <Icon className={`w-4 h-4 ${isSelected ? 'text-white' : 'text-purple-600'}`} />
                 </div>
                 <div>
-                  <div className="font-semibold text-sm">
+                  <div className={`font-bold text-sm ${isSelected ? 'text-white' : 'text-gray-900'}`}>
                     {getRouteLabel(route.type)}
                   </div>
                   {route.savings && (
-                    <div className="text-xs text-gray-500">
+                    <div className={`text-xs ${isSelected ? 'text-white/80' : 'text-gray-500'}`}>
                       {route.savings.time && `Save ${Math.round(route.savings.time / 60)} min`}
                       {route.savings.distance && ` • ${(route.savings.distance / 1000).toFixed(1)} km shorter`}
                     </div>
@@ -102,23 +102,27 @@ const RouteAlternatives = ({ routes, selectedIndex, onSelect }: RouteAlternative
               </div>
               {isSelected && (
                 <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  className="w-5 h-5 bg-white rounded-full flex items-center justify-center"
+                  initial={{ scale: 0, rotate: -180 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                  className="w-6 h-6 bg-white rounded-full flex items-center justify-center shadow-md"
                 >
-                  <Check className="w-3 h-3 text-green-600" />
+                  <Check className="w-4 h-4 text-purple-600" />
                 </motion.div>
               )}
             </div>
             
-            <div className="flex items-center gap-4 text-xs">
-              <div className="flex items-center gap-1">
-                <Clock className="w-3 h-3" />
-                <span className="font-medium">{formatDuration(route.duration)}</span>
+            <div className={`flex items-center gap-4 text-xs ml-2 ${
+              isSelected ? 'text-white/90' : 'text-gray-600'
+            }`}>
+              <div className="flex items-center gap-1.5 font-semibold">
+                <Clock className="w-3.5 h-3.5" />
+                <span>{formatDuration(route.duration)}</span>
               </div>
-              <div className="flex items-center gap-1">
-                <Ruler className="w-3 h-3" />
-                <span className="font-medium">{formatDistance(route.distance)}</span>
+              <div className={`w-1 h-1 rounded-full ${isSelected ? 'bg-white/50' : 'bg-gray-400'}`} />
+              <div className="flex items-center gap-1.5 font-semibold">
+                <Ruler className="w-3.5 h-3.5" />
+                <span>{formatDistance(route.distance)}</span>
               </div>
             </div>
           </motion.button>

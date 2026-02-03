@@ -6,6 +6,10 @@ export const mapStyles: Record<MapStyle, { name: string; url: string }> = {
     name: "Streets",
     url: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
   },
+  osm: {
+    name: "OSM",
+    url: "https://api.maptiler.com/maps/openstreetmap/style.json?key=a6f5eVD7TQ2Wig1pnZ02",
+  },
   satellite: {
     name: "Satellite",
     url: "https://api.maptiler.com/maps/hybrid/style.json?key=a6f5eVD7TQ2Wig1pnZ02",

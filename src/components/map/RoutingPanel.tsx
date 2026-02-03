@@ -291,7 +291,10 @@ const RoutingPanel = ({
                   <div>
                     {/* Route Alternatives */}
                     {alternatives.length > 0 && onSelectAlternative && (
-                      <div className="border-b border-gray-100">
+                      <div className="border-b border-gray-100 p-3">
+                        <div className="text-xs font-semibold text-gray-600 mb-3 uppercase tracking-wide">
+                          {alternatives.length} Route{alternatives.length !== 1 ? 's' : ''} Available
+                        </div>
                         <RouteAlternatives
                           routes={alternatives}
                           selectedIndex={selectedAlternative}

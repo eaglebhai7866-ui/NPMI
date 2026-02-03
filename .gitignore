@@ -26,3 +26,9 @@ dist-ssr
 # GIS Data folders
 NPMI Raster/
 NPMI Vector/
+
+# GraphHopper
+graphhopper/*.jar
+graphhopper/data/*.pbf
+graphhopper/graph-cache/
+graphhopper/*.log
