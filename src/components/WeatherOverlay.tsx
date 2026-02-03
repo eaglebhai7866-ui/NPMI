@@ -13,6 +13,9 @@ import {
   CloudFog,
   CloudDrizzle,
   Loader2,
+  AlertTriangle,
+  CheckCircle2,
+  Info,
 } from "lucide-react";
 
 export interface WeatherData {
@@ -25,13 +28,30 @@ export interface WeatherData {
     humidity: number;
     visibility: number;
     pressure: number;
+    airQuality?: {
+      aqi: number;
+      pm25: number;
+      pm10: number;
+      category: string;
+    };
   };
   hourly: Array<{
     time: string;
     temperature: number;
     weatherCode: number;
     precipitationProbability: number;
+    precipitation: number;
   }>;
+  alerts?: Array<{
+    event: string;
+    severity: string;
+    description: string;
+    start: string;
+    end: string;
+  }>;
+  confidence?: number;
+  sources?: string[];
+  lastUpdated?: string;
 }
 
 interface WeatherOverlayProps {
@@ -179,6 +199,55 @@ const WeatherOverlay = ({
                         </div>
                       </div>
                     </div>
+
+                    {/* Air Quality */}
+                    {selectedWeather.current.airQuality && (
+                      <div className="mt-3 bg-white/60 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="text-xs font-semibold text-gray-700">Air Quality</div>
+                          <div className={`text-xs font-medium px-2 py-0.5 rounded ${
+                            selectedWeather.current.airQuality.aqi <= 50 ? 'bg-green-100 text-green-700' :
+                            selectedWeather.current.airQuality.aqi <= 100 ? 'bg-yellow-100 text-yellow-700' :
+                            selectedWeather.current.airQuality.aqi <= 150 ? 'bg-orange-100 text-orange-700' :
+                            'bg-red-100 text-red-700'
+                          }`}>
+                            {selectedWeather.current.airQuality.category}
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="text-2xl font-bold text-gray-900">
+                            {selectedWeather.current.airQuality.aqi}
+                          </div>
+                          <div className="text-right text-xs text-gray-500">
+                            <div>PM2.5: {selectedWeather.current.airQuality.pm25} µg/m³</div>
+                            <div>PM10: {selectedWeather.current.airQuality.pm10} µg/m³</div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Confidence & Sources */}
+                    {selectedWeather.confidence && (
+                      <div className="mt-3 flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-1">
+                          {selectedWeather.confidence >= 90 ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+                          ) : selectedWeather.confidence >= 75 ? (
+                            <Info className="w-3.5 h-3.5 text-blue-500" />
+                          ) : (
+                            <AlertTriangle className="w-3.5 h-3.5 text-yellow-500" />
+                          )}
+                          <span className="text-gray-600">
+                            {selectedWeather.confidence}% confidence
+                          </span>
+                        </div>
+                        {selectedWeather.sources && selectedWeather.sources.length > 0 && (
+                          <div className="text-gray-400">
+                            {selectedWeather.sources.join(' + ')}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Hourly Forecast */}
@@ -188,6 +257,7 @@ const WeatherOverlay = ({
                       {selectedWeather.hourly.slice(0, 8).map((hour, index) => {
                         const { icon: HourIcon, color } = getWeatherInfo(hour.weatherCode);
                         const time = new Date(hour.time).toLocaleTimeString([], { hour: '2-digit' });
+                        const hasPrecipitation = hour.precipitation && hour.precipitation > 0;
                         return (
                           <div
                             key={index}
@@ -197,9 +267,16 @@ const WeatherOverlay = ({
                             <HourIcon className={`w-5 h-5 ${color}`} />
                             <div className="text-xs font-medium">{Math.round(hour.temperature)}°</div>
                             <div className="flex items-center gap-0.5">
-                              <Droplets className="w-2.5 h-2.5 text-blue-400" />
-                              <span className="text-[9px] text-gray-500">{hour.precipitationProbability}%</span>
+                              <Droplets className={`w-2.5 h-2.5 ${hasPrecipitation ? 'text-blue-600' : 'text-blue-400'}`} />
+                              <span className={`text-[9px] ${hasPrecipitation ? 'text-blue-600 font-medium' : 'text-gray-500'}`}>
+                                {hour.precipitationProbability}%
+                              </span>
                             </div>
+                            {hasPrecipitation && (
+                              <div className="text-[9px] text-blue-600 font-medium">
+                                {hour.precipitation.toFixed(1)}mm
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -213,9 +290,16 @@ const WeatherOverlay = ({
 
         {/* Footer */}
         <div className="px-4 py-2 border-t border-gray-100 bg-gray-50/50">
-          <span className="text-[10px] text-gray-400">
-            Weather data from Open-Meteo API
-          </span>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-gray-400">
+              Multi-source weather data
+            </span>
+            {selectedWeather?.lastUpdated && (
+              <span className="text-[10px] text-gray-400">
+                Updated {new Date(selectedWeather.lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </motion.div>
