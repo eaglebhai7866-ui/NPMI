@@ -257,13 +257,23 @@ export async function fetchWeatherData(
   // Add air quality if available
   if (airQualityData?.current) {
     const aqi = airQualityData.current.us_aqi || 0;
+    console.log('Air quality data received:', { aqi, pm25: airQualityData.current.pm2_5, pm10: airQualityData.current.pm10 });
     weatherData.current.airQuality = {
       aqi: Math.round(aqi),
       pm25: Math.round(airQualityData.current.pm2_5 || 0),
       pm10: Math.round(airQualityData.current.pm10 || 0),
       category: getAQICategory(aqi),
     };
+  } else {
+    console.log('No air quality data available for this location');
   }
+
+  console.log('Weather data prepared:', {
+    location: locationName,
+    confidence,
+    sources: sources.map(s => s.name),
+    hasAirQuality: !!weatherData.current.airQuality
+  });
 
   return weatherData;
 }

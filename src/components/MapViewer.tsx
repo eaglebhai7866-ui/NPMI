@@ -691,7 +691,12 @@ const MapViewer = () => {
 
             weatherData.push(weather);
             
-            console.log(`Weather fetched for ${weather.location} (${weather.sources?.join(', ')} - ${weather.confidence}% confidence)`);
+            console.log(`Weather fetched for ${weather.location}:`, {
+              sources: weather.sources?.join(', '),
+              confidence: weather.confidence,
+              hasAirQuality: !!weather.current.airQuality,
+              aqi: weather.current.airQuality?.aqi
+            });
           } catch (pointError) {
             console.error(`Error fetching weather for point ${index + 1}:`, pointError);
             
