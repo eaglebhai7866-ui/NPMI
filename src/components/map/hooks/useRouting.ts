@@ -66,8 +66,8 @@ export const useRouting = ({ map, travelMode, onRouteCalculated }: UseRoutingPro
   const drawAllRoutes = useCallback((routes: any[], selectedIndex: number) => {
     if (!map) return;
 
-    // Remove existing routes
-    for (let i = 0; i < 5; i++) {
+    // Remove existing routes (increased range to ensure all are cleared)
+    for (let i = 0; i < 10; i++) {
       if (map.getLayer(`route-${i}-casing`)) map.removeLayer(`route-${i}-casing`);
       if (map.getLayer(`route-${i}-line`)) map.removeLayer(`route-${i}-line`);
       if (map.getSource(`route-${i}`)) map.removeSource(`route-${i}`);
@@ -216,6 +216,23 @@ export const useRouting = ({ map, travelMode, onRouteCalculated }: UseRoutingPro
       isCalculatingRef.current = true;
       setRouteError(null); // Clear previous errors
 
+      // Clear all existing routes before calculating new ones
+      if (map) {
+        // Remove single route
+        if (map.getSource("route")) {
+          if (map.getLayer("route-line")) map.removeLayer("route-line");
+          if (map.getLayer("route-line-outline")) map.removeLayer("route-line-outline");
+          map.removeSource("route");
+        }
+        
+        // Remove alternative routes
+        for (let i = 0; i < 10; i++) { // Increased from 5 to 10 to be safe
+          if (map.getLayer(`route-${i}-casing`)) map.removeLayer(`route-${i}-casing`);
+          if (map.getLayer(`route-${i}-line`)) map.removeLayer(`route-${i}-line`);
+          if (map.getSource(`route-${i}`)) map.removeSource(`route-${i}`);
+        }
+      }
+
       try {
         const route = await calculateAlternatives(startPoint, endPoint);
         
@@ -352,8 +369,8 @@ export const useRouting = ({ map, travelMode, onRouteCalculated }: UseRoutingPro
         map.removeSource("route");
       }
       
-      // Remove alternative routes
-      for (let i = 0; i < 5; i++) {
+      // Remove alternative routes (increased range to ensure all are cleared)
+      for (let i = 0; i < 10; i++) {
         if (map.getLayer(`route-${i}-casing`)) map.removeLayer(`route-${i}-casing`);
         if (map.getLayer(`route-${i}-line`)) map.removeLayer(`route-${i}-line`);
         if (map.getSource(`route-${i}`)) map.removeSource(`route-${i}`);
