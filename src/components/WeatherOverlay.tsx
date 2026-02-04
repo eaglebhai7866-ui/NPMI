@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { useEffect } from "react";
 import { 
   X, 
   Cloud, 
@@ -87,6 +88,19 @@ const WeatherOverlay = ({
   onSelectLocation,
 }: WeatherOverlayProps) => {
   const selectedWeather = weatherData[selectedIndex];
+
+  // Debug log only when selectedWeather changes
+  useEffect(() => {
+    if (selectedWeather) {
+      console.log('WeatherOverlay - Selected weather:', {
+        location: selectedWeather.location,
+        confidence: selectedWeather.confidence,
+        hasAirQuality: !!selectedWeather.current?.airQuality,
+        sources: selectedWeather.sources,
+        aqi: selectedWeather.current?.airQuality?.aqi
+      });
+    }
+  }, [selectedWeather?.location]); // Only log when location changes
 
   return (
     <motion.div

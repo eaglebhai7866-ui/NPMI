@@ -21,7 +21,7 @@ timeout /t 5 /nobreak >nul
 REM Start Frontend
 echo [3/3] Starting Frontend...
 start "Frontend Dev Server" cmd /k "npm run dev"
-echo     Frontend will run on: http://localhost:5173
+echo     Frontend will run on: http://localhost:8081
 timeout /t 3 /nobreak >nul
 
 echo.
@@ -31,7 +31,7 @@ echo ========================================
 echo.
 echo  GraphHopper:  http://localhost:8989
 echo  Backend API:  http://localhost:3001
-echo  Frontend:     http://localhost:5173
+echo  Frontend:     http://localhost:8081
 echo.
 echo ========================================
 echo.
@@ -50,7 +50,7 @@ echo Opening frontend in browser in 5 seconds...
 timeout /t 5 /nobreak >nul
 
 REM Open browser
-start http://localhost:5173
+start http://localhost:8081
 
 echo.
 echo Browser opened! Enjoy your routing app!

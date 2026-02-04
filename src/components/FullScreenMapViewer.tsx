@@ -5,6 +5,8 @@ import { motion } from "framer-motion";
 import { Crosshair, Loader2, FileText } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import { voiceNavigator } from "@/lib/voice-navigation";
+import { fetchWeatherData, fetchLocationName, getOptimalSamplePoints } from "@/lib/weather-service";
+import type { WeatherData } from "@/lib/weather-service";
 
 // Import components
 import MapControls from "./map/MapControls";
@@ -654,117 +656,77 @@ const FullScreenMapViewer = ({ showDocsButton = false, onDocsClick }: { showDocs
       
       try {
         const coordinates = routeInfo.geometry.coordinates as [number, number][];
-        const numPoints = Math.min(5, Math.max(3, Math.floor(coordinates.length / 20)));
+        
+        // Use optimal number of sample points (8-12 based on route length)
+        const numPoints = getOptimalSamplePoints(coordinates.length);
         const step = Math.floor(coordinates.length / (numPoints - 1));
         const samplePoints = Array.from({ length: numPoints }, (_, i) => 
           i === numPoints - 1 ? coordinates[coordinates.length - 1] : coordinates[i * step]
         );
 
-        // Process weather requests sequentially but with optimizations
-        const weatherData = [];
+        console.log(`Fetching weather for ${numPoints} points along route...`);
+
+        // Process weather requests with reduced delay
+        const weatherData: WeatherData[] = [];
         for (let index = 0; index < samplePoints.length; index++) {
           const coord = samplePoints[index];
           const [lng, lat] = coord;
           
           try {
-            // Reduced delay between requests
+            // Small delay between requests to avoid rate limiting
             if (index > 0) {
-              await new Promise(resolve => setTimeout(resolve, 200)); // Reduced from 500ms to 200ms
+              await new Promise(resolve => setTimeout(resolve, 150));
             }
             
-            // Fetch weather and geocoding in parallel for each point
-            const [weatherResponse, locationName] = await Promise.all([
-              // Weather API call
-              fetch(
-                `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m,visibility,pressure_msl&hourly=temperature_2m,weather_code,precipitation_probability&timezone=auto&forecast_days=1`,
-                { 
-                  signal: AbortSignal.timeout(10000), // 10 second timeout
-                  headers: {
-                    'Accept': 'application/json'
-                  }
-                }
-              ),
-              // Geocoding call with shorter timeout
-              (async () => {
-                try {
-                  const controller = new AbortController();
-                  const timeoutId = setTimeout(() => controller.abort(), 2000); // Reduced from 5s to 2s
-                  
-                  const geoResponse = await fetch(
-                    `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10`,
-                    { 
-                      signal: controller.signal,
-                      headers: {
-                        'User-Agent': 'MapApp/1.0'
-                      }
-                    }
-                  );
-                  
-                  clearTimeout(timeoutId);
-                  
-                  if (geoResponse.ok) {
-                    const geoData = await geoResponse.json();
-                    return geoData.address?.city || geoData.address?.town || 
-                           geoData.address?.village || geoData.address?.county || 
-                           `Point ${index + 1}`;
-                  }
-                } catch {
-                  // Silently fail and use default name
-                }
-                return `Point ${index + 1}`;
-              })()
+            // Fetch location name and weather data in parallel
+            const [locationName, weather] = await Promise.all([
+              fetchLocationName(lat, lng, index),
+              fetchWeatherData(lat, lng, `Point ${index + 1}`)
             ]);
-            
-            if (!weatherResponse.ok) {
-              throw new Error(`Weather API error: ${weatherResponse.status}`);
-            }
-            
-            const data = await weatherResponse.json();
 
+            // Update location name with proper prefix
+            weather.location = index === 0 ? `Start: ${locationName}` : 
+                              index === numPoints - 1 ? `End: ${locationName}` : 
+                              locationName;
+
+            weatherData.push(weather);
+            
+            console.log(`Weather fetched for ${weather.location}:`, {
+              sources: weather.sources?.join(', '),
+              confidence: weather.confidence,
+              hasAirQuality: !!weather.current.airQuality,
+              aqi: weather.current.airQuality?.aqi
+            });
+          } catch (pointError) {
+            console.error(`Error fetching weather for point ${index + 1}:`, pointError);
+            
+            // Add fallback data for failed points
+            const locationName = await fetchLocationName(lat, lng, index).catch(() => `Point ${index + 1}`);
             weatherData.push({
               location: index === 0 ? `Start: ${locationName}` : 
                        index === numPoints - 1 ? `End: ${locationName}` : 
                        locationName,
               coordinates: coord,
               current: {
-                temperature: data.current?.temperature_2m || 0,
-                weatherCode: data.current?.weather_code || 0,
-                windSpeed: data.current?.wind_speed_10m || 0,
-                humidity: data.current?.relative_humidity_2m || 0,
-                visibility: data.current?.visibility || 10000,
-                pressure: data.current?.pressure_msl || 1013,
-              },
-              hourly: (data.hourly?.time || []).map((time: string, i: number) => ({
-                time,
-                temperature: data.hourly?.temperature_2m?.[i] || 0,
-                weatherCode: data.hourly?.weather_code?.[i] || 0,
-                precipitationProbability: data.hourly?.precipitation_probability?.[i] || 0,
-              })),
-            });
-          } catch (pointError) {
-            console.error(`Error fetching weather for point ${index + 1}:`, pointError);
-            // Add fallback data for failed points
-            weatherData.push({
-              location: index === 0 ? `Start: Point ${index + 1}` : 
-                       index === numPoints - 1 ? `End: Point ${index + 1}` : 
-                       `Point ${index + 1}`,
-              coordinates: coord,
-              current: {
-                temperature: 20, // Default temperature
-                weatherCode: 1, // Clear sky
+                temperature: 20,
+                weatherCode: 1,
                 windSpeed: 0,
                 humidity: 50,
                 visibility: 10000,
                 pressure: 1013,
               },
               hourly: [],
+              confidence: 0,
+              sources: [],
             });
           }
         }
 
         setWeatherData(weatherData);
         setSelectedWeatherIndex(0);
-        toast.success("Weather data loaded!");
+        
+        const avgConfidence = weatherData.reduce((sum, w) => sum + (w.confidence || 0), 0) / weatherData.length;
+        toast.success(`Weather data loaded! (${Math.round(avgConfidence)}% confidence)`);
       } catch (error) {
         console.error("Error fetching weather data:", error);
         setWeatherData([]);

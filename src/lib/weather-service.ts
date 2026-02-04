@@ -70,7 +70,13 @@ async function fetchOpenMeteo(lat: number, lng: number): Promise<any> {
     throw new Error(`Open-Meteo API error: ${response.status}`);
   }
 
-  return response.json();
+  const data = await response.json();
+  console.log('Open-Meteo response sample:', {
+    hasPrecipitation: !!data.hourly?.precipitation,
+    hourlyFields: Object.keys(data.hourly || {})
+  });
+  
+  return data;
 }
 
 /**
@@ -174,6 +180,8 @@ export async function fetchWeatherData(
   lng: number,
   locationName: string
 ): Promise<WeatherData> {
+  console.log(`[Weather Service] Fetching weather for ${locationName} at (${lat}, ${lng})`);
+  
   const sources: WeatherSource[] = [];
   let primaryData: any = null;
   let airQualityData: any = null;
@@ -185,6 +193,12 @@ export async function fetchWeatherData(
     fetchAirQuality(lat, lng),
   ]);
 
+  console.log('[Weather Service] API responses:', {
+    openMeteo: openMeteoData.status,
+    openWeather: openWeatherData.status,
+    airQuality: aqData.status
+  });
+
   // Process Open-Meteo (primary)
   if (openMeteoData.status === 'fulfilled' && openMeteoData.value) {
     primaryData = openMeteoData.value;
@@ -195,6 +209,9 @@ export async function fetchWeatherData(
       windSpeed: primaryData.current?.wind_speed_10m || 0,
       humidity: primaryData.current?.relative_humidity_2m || 0,
     });
+    console.log('[Weather Service] Open-Meteo data added to sources');
+  } else {
+    console.error('[Weather Service] Open-Meteo failed:', openMeteoData.status === 'rejected' ? openMeteoData.reason : 'No data');
   }
 
   // Process OpenWeatherMap (secondary)
@@ -207,17 +224,26 @@ export async function fetchWeatherData(
       windSpeed: (owmData.wind?.speed || 0) * 3.6, // Convert m/s to km/h
       humidity: owmData.main?.humidity || 0,
     });
+    console.log('[Weather Service] OpenWeatherMap data added to sources');
+  } else {
+    console.log('[Weather Service] OpenWeatherMap not available (no API key or failed)');
   }
 
   // Process Air Quality
   if (aqData.status === 'fulfilled' && aqData.value) {
     airQualityData = aqData.value;
+    console.log('[Weather Service] Air quality data received');
+  } else {
+    console.log('[Weather Service] Air quality data not available');
   }
 
   // If no data from any source, throw error
   if (sources.length === 0) {
+    console.error('[Weather Service] No data from any source!');
     throw new Error('Failed to fetch weather data from all sources');
   }
+
+  console.log(`[Weather Service] Total sources: ${sources.length}`);
 
   // Calculate average values from all sources
   const avgTemp = sources.reduce((sum, s) => sum + s.temperature, 0) / sources.length;
@@ -247,7 +273,7 @@ export async function fetchWeatherData(
       temperature: primaryData?.hourly?.temperature_2m?.[i] || 0,
       weatherCode: primaryData?.hourly?.weather_code?.[i] || 0,
       precipitationProbability: primaryData?.hourly?.precipitation_probability?.[i] || 0,
-      precipitation: primaryData?.hourly?.precipitation?.[i] || 0,
+      precipitation: primaryData?.hourly?.precipitation?.[i] || 0, // May be 0 if not available
     })),
     confidence,
     sources: sources.map(s => s.name),
