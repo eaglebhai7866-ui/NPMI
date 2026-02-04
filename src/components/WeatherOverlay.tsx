@@ -17,6 +17,10 @@ import {
   AlertTriangle,
   CheckCircle2,
   Info,
+  RefreshCw,
+  ThumbsUp,
+  ThumbsDown,
+  AlertCircle,
 } from "lucide-react";
 
 export interface WeatherData {
@@ -61,6 +65,7 @@ interface WeatherOverlayProps {
   isLoading?: boolean;
   selectedIndex: number;
   onSelectLocation: (index: number) => void;
+  onRefresh?: () => void;
 }
 
 // Weather code to icon and description mapping
@@ -80,14 +85,70 @@ const getWeatherInfo = (code: number): { icon: typeof Sun; description: string; 
   return { icon: Cloud, description: "Cloudy", color: "text-gray-500" };
 };
 
+// Get weather-based recommendation
+const getWeatherRecommendation = (weather: WeatherData): { 
+  type: 'good' | 'caution' | 'warning'; 
+  message: string;
+  icon: typeof ThumbsUp;
+} => {
+  const { current, hourly } = weather;
+  
+  // Check for severe weather in next 3 hours
+  const nextHours = hourly.slice(0, 3);
+  const hasHeavyRain = nextHours.some(h => h.precipitation > 5);
+  const hasThunderstorm = nextHours.some(h => h.weatherCode >= 95);
+  const hasSnow = nextHours.some(h => h.weatherCode >= 71 && h.weatherCode <= 77);
+  
+  // Check air quality
+  const poorAirQuality = current.airQuality && current.airQuality.aqi > 150;
+  const moderateAirQuality = current.airQuality && current.airQuality.aqi > 100;
+  
+  // Check visibility
+  const poorVisibility = current.visibility < 1000;
+  const lowVisibility = current.visibility < 5000;
+  
+  // Warning conditions
+  if (hasThunderstorm) {
+    return { type: 'warning', message: 'Thunderstorm expected - consider delaying travel', icon: AlertCircle };
+  }
+  if (hasHeavyRain) {
+    return { type: 'warning', message: 'Heavy rain expected - drive carefully', icon: AlertCircle };
+  }
+  if (poorAirQuality) {
+    return { type: 'warning', message: 'Hazardous air quality - avoid outdoor exposure', icon: AlertCircle };
+  }
+  if (poorVisibility) {
+    return { type: 'warning', message: 'Very poor visibility - extreme caution advised', icon: AlertCircle };
+  }
+  
+  // Caution conditions
+  if (hasSnow) {
+    return { type: 'caution', message: 'Snow expected - prepare for winter conditions', icon: AlertTriangle };
+  }
+  if (moderateAirQuality) {
+    return { type: 'caution', message: 'Moderate air quality - sensitive groups take precautions', icon: AlertTriangle };
+  }
+  if (lowVisibility) {
+    return { type: 'caution', message: 'Reduced visibility - drive with caution', icon: AlertTriangle };
+  }
+  if (current.windSpeed > 40) {
+    return { type: 'caution', message: 'Strong winds - be cautious of crosswinds', icon: AlertTriangle };
+  }
+  
+  // Good conditions
+  return { type: 'good', message: 'Good conditions for travel', icon: ThumbsUp };
+};
+
 const WeatherOverlay = ({
   weatherData,
   onClose,
   isLoading = false,
   selectedIndex,
   onSelectLocation,
+  onRefresh,
 }: WeatherOverlayProps) => {
   const selectedWeather = weatherData[selectedIndex];
+  const recommendation = selectedWeather ? getWeatherRecommendation(selectedWeather) : null;
 
   // Debug log only when selectedWeather changes
   useEffect(() => {
@@ -116,14 +177,26 @@ const WeatherOverlay = ({
             <Cloud className="w-5 h-5 text-white" />
             <span className="font-semibold text-white">Weather Along Route</span>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 hover:bg-white/20 rounded-lg transition-colors group"
-            title="Close"
-            aria-label="Close weather overlay"
-          >
-            <X className="w-4 h-4 text-white group-hover:scale-110 transition-transform" />
-          </button>
+          <div className="flex items-center gap-1">
+            {onRefresh && !isLoading && (
+              <button
+                onClick={onRefresh}
+                className="p-1.5 hover:bg-white/20 rounded-lg transition-colors group"
+                title="Refresh weather data"
+                aria-label="Refresh weather data"
+              >
+                <RefreshCw className="w-4 h-4 text-white group-hover:rotate-180 transition-transform duration-500" />
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-1.5 hover:bg-white/20 rounded-lg transition-colors group"
+              title="Close"
+              aria-label="Close weather overlay"
+            >
+              <X className="w-4 h-4 text-white group-hover:scale-110 transition-transform" />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
@@ -157,6 +230,28 @@ const WeatherOverlay = ({
                   </button>
                 ))}
               </div>
+
+              {/* Weather Recommendation */}
+              {recommendation && (
+                <div className={`mb-4 rounded-lg p-3 flex items-center gap-2 ${
+                  recommendation.type === 'good' ? 'bg-green-50 border border-green-200' :
+                  recommendation.type === 'caution' ? 'bg-yellow-50 border border-yellow-200' :
+                  'bg-red-50 border border-red-200'
+                }`}>
+                  <recommendation.icon className={`w-5 h-5 flex-shrink-0 ${
+                    recommendation.type === 'good' ? 'text-green-600' :
+                    recommendation.type === 'caution' ? 'text-yellow-600' :
+                    'text-red-600'
+                  }`} />
+                  <span className={`text-sm font-medium ${
+                    recommendation.type === 'good' ? 'text-green-700' :
+                    recommendation.type === 'caution' ? 'text-yellow-700' :
+                    'text-red-700'
+                  }`}>
+                    {recommendation.message}
+                  </span>
+                </div>
+              )}
 
               {selectedWeather && (
                 <>

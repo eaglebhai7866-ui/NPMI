@@ -156,6 +156,7 @@ const MapViewer = () => {
     measureResult,
     toggleMeasureMode,
     clearMeasurement,
+    removePoint,
   } = useMeasurement({ map });
 
   // Update POI markers when pois change
@@ -943,7 +944,7 @@ const MapViewer = () => {
                   onToggleRouting={handleToggleRouting}
                   onLocateUser={handleLocateUser}
                   onTogglePOI={() => setShowPOIPanel(!showPOIPanel)}
-                  onToggleMeasure={() => toggleMeasureMode("distance")}
+                  onToggleMeasure={(mode) => toggleMeasureMode(mode)}
                   onToggleLayerPanel={() => setShowLayerPanel(!showLayerPanel)}
                   onToggleTraffic={handleToggleTraffic}
                 />
@@ -967,7 +968,7 @@ const MapViewer = () => {
                 onResetView={handleResetView}
                 onToggleTraffic={handleToggleTraffic}
                 onTogglePOI={() => setShowPOIPanel(!showPOIPanel)}
-                onToggleMeasure={() => toggleMeasureMode("distance")}
+                onToggleMeasure={(mode) => toggleMeasureMode(mode)}
                 onToggleLayerPanel={() => setShowLayerPanel(!showLayerPanel)}
               />
             )}
@@ -1038,6 +1039,7 @@ const MapViewer = () => {
                 measureResult={measureResult}
                 onClose={() => toggleMeasureMode(measureMode as "distance" | "area")}
                 onClear={clearMeasurement}
+                onRemovePoint={removePoint}
               />
             ) : (
               <MeasurementPanel
@@ -1047,6 +1049,7 @@ const MapViewer = () => {
                 measureResult={measureResult}
                 onClose={() => toggleMeasureMode(measureMode as "distance" | "area")}
                 onClear={clearMeasurement}
+                onRemovePoint={removePoint}
               />
             )}
 
@@ -1080,6 +1083,7 @@ const MapViewer = () => {
                   isLoading={isLoadingWeather}
                   selectedIndex={selectedWeatherIndex}
                   onSelectLocation={setSelectedWeatherIndex}
+                  onRefresh={handleToggleWeather}
                 />
               ) : (
                 <WeatherOverlay
@@ -1088,6 +1092,7 @@ const MapViewer = () => {
                   isLoading={isLoadingWeather}
                   selectedIndex={selectedWeatherIndex}
                   onSelectLocation={setSelectedWeatherIndex}
+                  onRefresh={handleToggleWeather}
                 />
               )
             )}

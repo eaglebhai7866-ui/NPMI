@@ -156,6 +156,7 @@ const FullScreenMapViewer = ({ showDocsButton = false, onDocsClick }: { showDocs
     measureResult,
     toggleMeasureMode,
     clearMeasurement,
+    removePoint,
   } = useMeasurement({ map });
 
   // Update POI markers when pois change
@@ -933,7 +934,7 @@ const FullScreenMapViewer = ({ showDocsButton = false, onDocsClick }: { showDocs
               onToggleRouting={handleToggleRouting}
               onLocateUser={handleLocateUser}
               onTogglePOI={() => setShowPOIPanel(!showPOIPanel)}
-              onToggleMeasure={() => toggleMeasureMode("distance")}
+              onToggleMeasure={(mode) => toggleMeasureMode(mode)}
               onToggleLayerPanel={() => setShowLayerPanel(!showLayerPanel)}
               onToggleTraffic={handleToggleTraffic}
               onDocsClick={onDocsClick}
@@ -958,7 +959,7 @@ const FullScreenMapViewer = ({ showDocsButton = false, onDocsClick }: { showDocs
             onResetView={handleResetView}
             onToggleTraffic={handleToggleTraffic}
             onTogglePOI={() => setShowPOIPanel(!showPOIPanel)}
-            onToggleMeasure={() => toggleMeasureMode("distance")}
+            onToggleMeasure={(mode) => toggleMeasureMode(mode)}
             onToggleLayerPanel={() => setShowLayerPanel(!showLayerPanel)}
           />
         )}
@@ -1029,6 +1030,7 @@ const FullScreenMapViewer = ({ showDocsButton = false, onDocsClick }: { showDocs
             measureResult={measureResult}
             onClose={() => toggleMeasureMode(measureMode as "distance" | "area")}
             onClear={clearMeasurement}
+            onRemovePoint={removePoint}
           />
         ) : (
           <MeasurementPanel
@@ -1038,6 +1040,7 @@ const FullScreenMapViewer = ({ showDocsButton = false, onDocsClick }: { showDocs
             measureResult={measureResult}
             onClose={() => toggleMeasureMode(measureMode as "distance" | "area")}
             onClear={clearMeasurement}
+            onRemovePoint={removePoint}
           />
         )}
 
@@ -1071,6 +1074,7 @@ const FullScreenMapViewer = ({ showDocsButton = false, onDocsClick }: { showDocs
               isLoading={isLoadingWeather}
               selectedIndex={selectedWeatherIndex}
               onSelectLocation={setSelectedWeatherIndex}
+              onRefresh={handleToggleWeather}
             />
           ) : (
             <WeatherOverlay
@@ -1079,6 +1083,7 @@ const FullScreenMapViewer = ({ showDocsButton = false, onDocsClick }: { showDocs
               isLoading={isLoadingWeather}
               selectedIndex={selectedWeatherIndex}
               onSelectLocation={setSelectedWeatherIndex}
+              onRefresh={handleToggleWeather}
             />
           )
         )}

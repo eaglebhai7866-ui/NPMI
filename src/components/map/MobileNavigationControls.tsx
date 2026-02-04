@@ -27,7 +27,7 @@ interface MobileNavigationControlsProps {
   onToggleRouting: () => void;
   onLocateUser: () => void;
   onTogglePOI: () => void;
-  onToggleMeasure: () => void;
+  onToggleMeasure: (mode: "distance" | "area") => void;
   onToggleLayerPanel: () => void;
   onToggleTraffic: () => void;
   onDocsClick?: () => void;
@@ -107,43 +107,53 @@ const MobileNavigationControls = ({
             <span className="text-xs font-medium">POI</span>
           </motion.button>
 
-          {/* Layers */}
+          {/* Distance Measure */}
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={() => onToggleMeasure("distance")}
+            className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-all ${
+              measureMode === "distance" 
+                ? "bg-indigo-500 text-white shadow-md" 
+                : "text-gray-600 hover:text-primary hover:bg-gray-50"
+            }`}
+            aria-label="Measure distance"
+          >
+            <Ruler className="w-5 h-5" />
+            <span className="text-xs font-medium">Distance</span>
+          </motion.button>
+
+          {/* Area Measure */}
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={() => onToggleMeasure("area")}
+            className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-all ${
+              measureMode === "area" 
+                ? "bg-indigo-500 text-white shadow-md" 
+                : "text-gray-600 hover:text-primary hover:bg-gray-50"
+            }`}
+            aria-label="Measure area"
+          >
+            <Square className="w-5 h-5" />
+            <span className="text-xs font-medium">Area</span>
+          </motion.button>
+        </div>
+
+        {/* Secondary Controls */}
+        <div className="flex justify-center gap-2 mt-3 pt-3 border-t border-gray-200">
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={onToggleLayerPanel}
-            className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-all ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
               showLayerPanel 
                 ? "bg-blue-500 text-white shadow-md" 
                 : "text-gray-600 hover:text-primary hover:bg-gray-50"
             }`}
             aria-label="Toggle map layers"
           >
-            <Layers className="w-5 h-5" />
-            <span className="text-xs font-medium">Layers</span>
+            <Layers className="w-4 h-4" />
+            <span>Layers</span>
           </motion.button>
 
-          {/* Measure */}
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            onClick={onToggleMeasure}
-            className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-all ${
-              measureMode !== "none" 
-                ? "bg-indigo-500 text-white shadow-md" 
-                : "text-gray-600 hover:text-primary hover:bg-gray-50"
-            }`}
-            aria-label="Toggle measurement tool"
-          >
-            {measureMode === "area" ? (
-              <Square className="w-5 h-5" />
-            ) : (
-              <Ruler className="w-5 h-5" />
-            )}
-            <span className="text-xs font-medium">Measure</span>
-          </motion.button>
-        </div>
-
-        {/* Secondary Controls */}
-        <div className="flex justify-center gap-2 mt-3 pt-3 border-t border-gray-200">
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={onToggleTraffic}
