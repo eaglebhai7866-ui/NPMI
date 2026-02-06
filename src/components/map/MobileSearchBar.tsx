@@ -23,6 +23,8 @@ const MobileSearchBar = ({
   const searchTimeout = useRef<NodeJS.Timeout>();
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+
   const searchPlaces = async (searchQuery: string) => {
     if (searchQuery.length < 2) {
       setResults([]);
@@ -32,10 +34,9 @@ const MobileSearchBar = ({
 
     setIsLoading(true);
     try {
+      // Use backend proxy to avoid CORS issues
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-          searchQuery
-        )}&limit=8&countrycodes=pk&addressdetails=1`
+        `${BACKEND_URL}/api/geocoding/search?q=${encodeURIComponent(searchQuery)}&limit=8`
       );
       
       if (!response.ok) {

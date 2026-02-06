@@ -1,7 +1,9 @@
-import express from 'express';
+  import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import routingRoutes from './routes/routing';
+import poisRoutes from './routes/pois';
+import geocodingRoutes from './routes/geocoding';
 import { errorHandler } from './middleware/errorHandler';
 import logger from './utils/logger';
 
@@ -35,6 +37,8 @@ app.use((req, res, next) => {
 
 // Routes
 app.use('/api', routingRoutes);
+app.use('/api/pois', poisRoutes);
+app.use('/api/geocoding', geocodingRoutes);
 
 // Root endpoint
 app.get('/', (_req, res) => {
@@ -46,6 +50,12 @@ app.get('/', (_req, res) => {
       health: 'GET /api/health',
       route: 'POST /api/route',
       clearCache: 'POST /api/cache/clear',
+      poiCategories: 'GET /api/pois/categories',
+      pois: 'GET /api/pois/:category',
+      poiSearch: 'GET /api/pois/:category/search?q=name',
+      poiStats: 'GET /api/pois/stats/all',
+      geocodingSearch: 'GET /api/geocoding/search?q=query',
+      reverseGeocoding: 'GET /api/geocoding/reverse?lat=33.6&lon=73.0',
     },
   });
 });
@@ -66,5 +76,10 @@ app.listen(PORT, () => {
   logger.info(`  GET  http://localhost:${PORT}/api/health`);
   logger.info(`  POST http://localhost:${PORT}/api/route`);
   logger.info(`  POST http://localhost:${PORT}/api/cache/clear`);
+  logger.info(`  GET  http://localhost:${PORT}/api/pois/categories`);
+  logger.info(`  GET  http://localhost:${PORT}/api/pois/:category`);
+  logger.info(`  GET  http://localhost:${PORT}/api/pois/stats/all`);
+  logger.info(`  GET  http://localhost:${PORT}/api/geocoding/search`);
+  logger.info(`  GET  http://localhost:${PORT}/api/geocoding/reverse`);
   logger.info('========================================');
 });

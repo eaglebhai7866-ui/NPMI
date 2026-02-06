@@ -98,7 +98,7 @@ const POIPanel = ({
             )}
 
             <div className="mt-3 pt-3 border-t border-gray-100">
-              <span className="text-[10px] text-gray-400">Data from OpenStreetMap</span>
+              <span className="text-[10px] text-gray-400">Data from Local Backend</span>
             </div>
           </div>
         </motion.div>

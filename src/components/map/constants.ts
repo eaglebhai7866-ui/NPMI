@@ -1,4 +1,4 @@
-import { Car, Bike, Footprints, Hospital, GraduationCap, Fuel, Utensils } from "lucide-react";
+import { Car, Bike, Footprints, Hospital, GraduationCap, Fuel, Utensils, Church, Building2, ShieldCheck, Trees, Hotel, ShoppingBag } from "lucide-react";
 import type { MapStyle, TravelMode, POICategory } from "./types";
 
 export const mapStyles: Record<MapStyle, { name: string; url: string }> = {
@@ -31,6 +31,12 @@ export const poiCategories: Record<POICategory, { name: string; icon: typeof Hos
   school: { name: "Schools", icon: GraduationCap, color: "#3b82f6", query: "amenity=school" },
   fuel: { name: "Fuel Stations", icon: Fuel, color: "#f59e0b", query: "amenity=fuel" },
   restaurant: { name: "Restaurants", icon: Utensils, color: "#22c55e", query: "amenity=restaurant" },
+  mosque: { name: "Mosques", icon: Church, color: "#8b5cf6", query: "amenity=place_of_worship" },
+  bank: { name: "Banks", icon: Building2, color: "#06b6d4", query: "amenity=bank" },
+  police: { name: "Police Stations", icon: ShieldCheck, color: "#0ea5e9", query: "amenity=police" },
+  park: { name: "Parks", icon: Trees, color: "#10b981", query: "leisure=park" },
+  hotel: { name: "Hotels", icon: Hotel, color: "#ec4899", query: "tourism=hotel" },
+  shop: { name: "Shops", icon: ShoppingBag, color: "#f97316", query: "shop=supermarket" },
 };
 
 export const pakistanCities = [

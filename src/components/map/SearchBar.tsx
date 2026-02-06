@@ -18,6 +18,8 @@ const SearchBar = ({ isRoutingMode, selectingPoint, onSelectResult }: SearchBarP
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+
   const searchPlaces = async (query: string) => {
     if (query.length < 2) {
       setSearchResults([]);
@@ -28,13 +30,10 @@ const SearchBar = ({ isRoutingMode, selectingPoint, onSelectResult }: SearchBarP
     setIsSearching(true);
 
     try {
-      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=pk&limit=8&addressdetails=1`;
+      // Use backend proxy to avoid CORS issues
+      const url = `${BACKEND_URL}/api/geocoding/search?q=${encodeURIComponent(query)}&limit=8`;
       
-      const response = await fetch(url, {
-        headers: {
-          'Accept-Language': 'en',
-        },
-      });
+      const response = await fetch(url);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

@@ -73,23 +73,25 @@ export const useRouting = ({ map, travelMode, onRouteCalculated }: UseRoutingPro
       if (map.getSource(`route-${i}`)) map.removeSource(`route-${i}`);
     }
 
-    // Draw each route with different styling
+    // Draw routes in two passes: non-selected first, then selected on top
+    // This ensures the selected route is always visible
+    
+    // Pass 1: Draw non-selected routes (gray alternatives)
     routes.forEach((route, index) => {
-      const isSelected = index === selectedIndex;
+      if (index === selectedIndex) return; // Skip selected route for now
       
-      // Route colors: selected = purple, alternatives = gray
-      const lineColor = isSelected ? "#7c3aed" : "#94a3b8"; // Purple or gray
-      const casingColor = isSelected ? "#5b21b6" : "#64748b"; // Darker purple or gray
-      const lineWidth = isSelected ? 8 : 6;
-      const casingWidth = isSelected ? 12 : 9;
-      const opacity = isSelected ? 1 : 0.6;
+      const lineColor = "#94a3b8"; // Gray
+      const casingColor = "#64748b"; // Darker gray
+      const lineWidth = 6;
+      const casingWidth = 9;
+      const opacity = 0.6;
 
       // Add route source
       map.addSource(`route-${index}`, {
         type: "geojson",
         data: {
           type: "Feature",
-          properties: { index, selected: isSelected },
+          properties: { index, selected: false },
           geometry: route.geometry,
         },
       });
@@ -142,6 +144,72 @@ export const useRouting = ({ map, travelMode, onRouteCalculated }: UseRoutingPro
         map.getCanvas().style.cursor = '';
       });
     });
+
+    // Pass 2: Draw selected route on top (purple)
+    const selectedRoute = routes[selectedIndex];
+    if (selectedRoute) {
+      const lineColor = "#7c3aed"; // Purple
+      const casingColor = "#5b21b6"; // Darker purple
+      const lineWidth = 8;
+      const casingWidth = 12;
+      const opacity = 1;
+
+      // Add route source
+      map.addSource(`route-${selectedIndex}`, {
+        type: "geojson",
+        data: {
+          type: "Feature",
+          properties: { index: selectedIndex, selected: true },
+          geometry: selectedRoute.geometry,
+        },
+      });
+
+      // Add casing (outline) layer
+      map.addLayer({
+        id: `route-${selectedIndex}-casing`,
+        type: "line",
+        source: `route-${selectedIndex}`,
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+        },
+        paint: {
+          "line-color": casingColor,
+          "line-width": casingWidth,
+          "line-opacity": opacity * 0.8,
+        },
+      });
+
+      // Add main route line
+      map.addLayer({
+        id: `route-${selectedIndex}-line`,
+        type: "line",
+        source: `route-${selectedIndex}`,
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+        },
+        paint: {
+          "line-color": lineColor,
+          "line-width": lineWidth,
+          "line-opacity": opacity,
+        },
+      });
+
+      // Add click handler
+      map.on('click', `route-${selectedIndex}-line`, () => {
+        // Already selected, do nothing
+      });
+
+      // Change cursor on hover
+      map.on('mouseenter', `route-${selectedIndex}-line`, () => {
+        map.getCanvas().style.cursor = 'pointer';
+      });
+
+      map.on('mouseleave', `route-${selectedIndex}-line`, () => {
+        map.getCanvas().style.cursor = '';
+      });
+    }
   }, [map, handleSelectAlternative]);
 
   // Legacy single route drawing (for backward compatibility)

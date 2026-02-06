@@ -1,6 +1,6 @@
 export type MapStyle = "streets" | "satellite" | "terrain" | "osm";
 export type TravelMode = "driving" | "cycling" | "walking";
-export type POICategory = "hospital" | "school" | "fuel" | "restaurant";
+export type POICategory = "hospital" | "school" | "fuel" | "restaurant" | "mosque" | "bank" | "police" | "park" | "hotel" | "shop";
 export type MeasureMode = "none" | "distance" | "area";
 
 export interface RoutePoint {

@@ -129,15 +129,26 @@ class GraphHopperService {
    * Transform GraphHopper response to our format
    */
   private transformResponse(data: GraphHopperResponse): RouteInfo[] {
-    return data.paths.map((path) => ({
-      distance: path.distance,
-      duration: path.time / 1000, // Convert ms to seconds
-      geometry: {
-        type: 'LineString' as const,
-        coordinates: path.points.coordinates,
-      },
-      steps: this.transformInstructions(path.instructions, path.points.coordinates),
-    }));
+    return data.paths.map((path) => {
+      // GraphHopper returns time in milliseconds
+      // Log to verify the actual value
+      logger.info('Route time from GraphHopper', {
+        timeMs: path.time,
+        timeSeconds: path.time / 1000,
+        timeMinutes: path.time / 1000 / 60,
+        distance: path.distance,
+      });
+      
+      return {
+        distance: path.distance,
+        duration: path.time / 1000, // Convert ms to seconds
+        geometry: {
+          type: 'LineString' as const,
+          coordinates: path.points.coordinates,
+        },
+        steps: this.transformInstructions(path.instructions, path.points.coordinates),
+      };
+    });
   }
 
   /**

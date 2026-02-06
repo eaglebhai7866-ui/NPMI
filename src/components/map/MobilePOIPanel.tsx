@@ -122,7 +122,7 @@ const MobilePOIPanel = ({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm text-gray-500">
                   <MapPin className="w-4 h-4" />
-                  <span>Data from OpenStreetMap</span>
+                  <span>Data from Local Backend</span>
                 </div>
                 {activePOICategories.size > 0 && (
                   <button
